@@ -1,0 +1,11 @@
+.event-boxes {
+    display: flex;
+    gap: 10px;
+}
+
+.category-box {
+    padding: 5px 10px;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+}
