@@ -268,32 +268,84 @@ if ($activatedEvents !== null && count($activatedEvents) === 1) {
     <div class="form-group">
     <label for="mobileNumber">Mobile Number:</label>
     <!-- Add oninput attribute to trigger the AJAX request -->
-<input type="text" id="mobileNumber" name="mobileNumber" pattern="[0-9]{10}" minlength="10" maxlength="10" class="form-control" required oninput="checkPhoneNumber()">
+    <input type="text" id="mobileNumber" name="mobileNumber" pattern="[0-9]{10}" minlength="10" maxlength="10" 
+           class="form-control" required oninput="checkPhoneNumber()">
     <small id="mobileError" class="form-text text-danger"></small><br><br>
-    </div>
-    
-    <div id="additionalFields">
+</div>
+
+<div id="additionalFields">
     <div class="form-group">
         <label for="fullName">Full Name:</label>
-        <input type="text" id="fullName" name="fullName" class="form-control" required value="" disabled><br><br>
+        <input type="text" id="fullName" name="fullName" class="form-control" value="" disabled><br><br>
     </div>
     <div class="form-group">
         <label for="email">Email:</label>
-        <input type="email" id="email" name="email" class="form-control"  required value="" disabled><br><br>
+        <input type="email" id="email" name="email" class="form-control" value="" disabled><br><br>
     </div>
     <div class="form-group">
         <label for="designation">Designation:</label>
-        <input type="text" id="designation" name="designation" class="form-control" required value="" disabled><br><br>
+        <input type="text" id="designation" name="designation" class="form-control" value="" disabled><br><br>
     </div>
     <div class="form-group">
         <label for="organization">Organization:</label>
-        <input type="text" id="organization" name="organization" class="form-control" required value="" disabled><br><br>
+        <input type="text" id="organization" name="organization" class="form-control" value="" disabled><br><br>
     </div>
 </div>
 
-    <button type="submit" class="btn btn-outline-success" value="Register">Submit</button>
-</form>
- </div>
+<button type="submit" class="btn btn-outline-success" value="Register">Submit</button>
+
+<!-- <script>
+    function checkPhoneNumber() {
+        const mobileNumber = document.getElementById("mobileNumber").value;
+        const mobileError = document.getElementById("mobileError");
+        const fullName = document.getElementById("fullName");
+        const email = document.getElementById("email");
+        const designation = document.getElementById("designation");
+        const organization = document.getElementById("organization");
+
+        if (mobileNumber.length === 10) {
+            // Make an AJAX call to check_phone_number.php
+            fetch("check_phone_number.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `mobileNumber=${mobileNumber}`,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Populate the fields with subscriber details
+                        const user = data.user;
+                        fullName.value = user.name || ""; // Replace `name` with the actual field in your DB
+                        email.value = user.email || "";   // Replace `email` with the fetched email
+                        designation.value = user.designation || ""; // Replace `designation` with the actual field
+                        organization.value = user.organization || ""; // Replace `organization` with the actual field
+                        mobileError.textContent = ""; // Clear any previous error
+                    } else {
+                        // Clear fields if no subscriber found
+                        fullName.value = "";
+                        email.value = "";
+                        designation.value = "";
+                        organization.value = "";
+                        mobileError.textContent = "No subscriber found for this phone number.";
+                    }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    mobileError.textContent = "An error occurred while checking the phone number.";
+                });
+        } else {
+            // Clear fields if mobile number is invalid
+            fullName.value = "";
+            email.value = "";
+            designation.value = "";
+            organization.value = "";
+            mobileError.textContent = "Enter a valid 10-digit mobile number.";
+        }
+    }
+</script> -->
+
 
 
 

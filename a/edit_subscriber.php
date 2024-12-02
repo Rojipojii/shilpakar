@@ -11,6 +11,25 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
+// Fetch all events
+$allEventsQuery = $conn->prepare("SELECT event_id, event_name FROM events");
+$allEventsQuery->execute();
+$allEventsResult = $allEventsQuery->get_result();
+$allEvents = [];
+while ($event = $allEventsResult->fetch_assoc()) {
+    $allEvents[] = $event;
+}
+
+// Fetch all categories
+$allCategoriesQuery = $conn->prepare("SELECT category_id, category_name FROM categories");
+$allCategoriesQuery->execute();
+$allCategoriesResult = $allCategoriesQuery->get_result();
+$allCategories = [];
+while ($category = $allCategoriesResult->fetch_assoc()) {
+    $allCategories[] = $category;
+}
+
+
 // Fetch subscriber details based on the ID passed through URL
 if (isset($_GET['id']) && is_numeric($_GET['id'])) {
     $subscriberID = $_GET['id'];
@@ -29,37 +48,36 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $subscriber = $result->fetch_assoc();
 
         // Fetch all phone numbers associated with the subscriber
-$phoneQuery = $conn->prepare("SELECT phone_number FROM phone_numbers WHERE subscriber_id = ?");
-if ($phoneQuery === false) {
-    die('MySQL prepare error for phone query: ' . $conn->error); // Added error handling for phone query
-}
-$phoneQuery->bind_param("i", $subscriberID);
-$phoneQuery->execute();
-$phoneResult = $phoneQuery->get_result();
-$subscriberPhones = [];
-while ($phone = $phoneResult->fetch_assoc()) {
-    $subscriberPhones[] = $phone['phone_number'];
-}
-// Remove duplicates using array_unique
-$subscriberPhones = array_unique($subscriberPhones);
-$subscriberPhone = implode(', ', $subscriberPhones); // Join all unique phone numbers with commas
+        $phoneQuery = $conn->prepare("SELECT phone_number FROM phone_numbers WHERE subscriber_id = ?");
+        if ($phoneQuery === false) {
+            die('MySQL prepare error for phone query: ' . $conn->error); // Added error handling for phone query
+        }
+        $phoneQuery->bind_param("i", $subscriberID);
+        $phoneQuery->execute();
+        $phoneResult = $phoneQuery->get_result();
+        $subscriberPhones = [];
+        while ($phone = $phoneResult->fetch_assoc()) {
+            $subscriberPhones[] = $phone['phone_number'];
+        }
+        // Remove duplicates using array_unique
+        $subscriberPhones = array_unique($subscriberPhones);
+        $subscriberPhone = implode(', ', $subscriberPhones); // Join all unique phone numbers with commas
 
-// Fetch all emails associated with the subscriber
-$emailQuery = $conn->prepare("SELECT email FROM emails WHERE subscriber_id = ?");
-if ($emailQuery === false) {
-    die('MySQL prepare error for email query: ' . $conn->error); // Added error handling for email query
-}
-$emailQuery->bind_param("i", $subscriberID);
-$emailQuery->execute();
-$emailResult = $emailQuery->get_result();
-$subscriberEmails = [];
-while ($email = $emailResult->fetch_assoc()) {
-    $subscriberEmails[] = $email['email'];
-}
-// Remove duplicates using array_unique
-$subscriberEmails = array_unique($subscriberEmails);
-$subscriberEmail = implode(', ', $subscriberEmails); // Join all unique emails with commas
-
+        // Fetch all emails associated with the subscriber
+        $emailQuery = $conn->prepare("SELECT email FROM emails WHERE subscriber_id = ?");
+        if ($emailQuery === false) {
+            die('MySQL prepare error for email query: ' . $conn->error); // Added error handling for email query
+        }
+        $emailQuery->bind_param("i", $subscriberID);
+        $emailQuery->execute();
+        $emailResult = $emailQuery->get_result();
+        $subscriberEmails = [];
+        while ($email = $emailResult->fetch_assoc()) {
+            $subscriberEmails[] = $email['email'];
+        }
+        // Remove duplicates using array_unique
+        $subscriberEmails = array_unique($subscriberEmails);
+        $subscriberEmail = implode(', ', $subscriberEmails); // Join all unique emails with commas
 
         // Fetch unique events attended by subscribers with the same phone number or email
         $eventsQuery = $conn->prepare("SELECT DISTINCT e.event_name
@@ -91,16 +109,16 @@ $subscriberEmail = implode(', ', $subscriberEmails); // Join all unique emails w
         $subscriber['events_attended'] = $eventsAttendedString;
 
         // Fetch unique categories attended by subscribers with the same phone number or email
-$categoriesQuery = $conn->prepare("SELECT DISTINCT c.category_name
-                                  FROM event_subscriber_mapping esm
-                                  INNER JOIN categories c ON esm.category_id = c.category_id
-                                  WHERE esm.subscriber_id IN (
-                                      SELECT s.subscriber_id
-                                      FROM subscribers s
-                                      LEFT JOIN phone_numbers pn ON s.subscriber_id = pn.subscriber_id
-                                      LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
-                                      WHERE pn.phone_number = ? OR e.email = ?
-                                  )");
+        $categoriesQuery = $conn->prepare("SELECT DISTINCT c.category_name
+                                          FROM event_subscriber_mapping esm
+                                          INNER JOIN categories c ON esm.category_id = c.category_id
+                                          WHERE esm.subscriber_id IN (
+                                              SELECT s.subscriber_id
+                                              FROM subscribers s
+                                              LEFT JOIN phone_numbers pn ON s.subscriber_id = pn.subscriber_id
+                                              LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
+                                              WHERE pn.phone_number = ? OR e.email = ?
+                                          )");
 
         if ($categoriesQuery === false) {
             die('MySQL prepare error for categories query: ' . $conn->error); // Added error handling for categories query
@@ -139,43 +157,88 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $designation = $_POST['designation'];
     $organization = $_POST['organization'];
     $address = $_POST['address'];
+    $selectedEvents = $_POST['events'] ?? [];
+    $selectedCategories = $_POST['categories'] ?? [];
 
     // Update the subscriber details in the 'subscribers' table
     $updateStmt = $conn->prepare("UPDATE subscribers SET full_name = ?, designation = ?, organization = ?, address = ? WHERE subscriber_id = ?");
-    if ($updateStmt === false) {
-        die('MySQL prepare error for update statement: ' . $conn->error); // Added error handling for update statement
-    }
     $updateStmt->bind_param("ssssi", $full_name, $designation, $organization, $address, $subscriberID);
 
     if ($updateStmt->execute()) {
-        // Update the phone number in the 'phone_numbers' table
+        // Update phone and email
         $updatePhoneStmt = $conn->prepare("UPDATE phone_numbers SET phone_number = ? WHERE subscriber_id = ?");
-        if ($updatePhoneStmt === false) {
-            die('MySQL prepare error for phone update: ' . $conn->error); // Added error handling for phone update
-        }
         $updatePhoneStmt->bind_param("si", $phone_number, $subscriberID);
+        $updatePhoneStmt->execute();
 
-        // Update the email in the 'emails' table
         $updateEmailStmt = $conn->prepare("UPDATE emails SET email = ? WHERE subscriber_id = ?");
-        if ($updateEmailStmt === false) {
-            die('MySQL prepare error for email update: ' . $conn->error); // Added error handling for email update
-        }
         $updateEmailStmt->bind_param("si", $email, $subscriberID);
+        $updateEmailStmt->execute();
 
-        // Execute updates for phone number and email
-        if ($updatePhoneStmt->execute() && $updateEmailStmt->execute()) {
-            // Redirect back to subscribers page after updating
-            header("Location: subscribers.php");
-            exit();
-        } else {
-            // Error occurred while updating phone/email
-            $errorMessage = "Error updating phone/email: " . $conn->error;
+        // Update events
+        $existingEventsQuery = $conn->prepare("SELECT event_id FROM event_subscriber_mapping WHERE subscriber_id = ?");
+        $existingEventsQuery->bind_param("i", $subscriberID);
+        $existingEventsQuery->execute();
+        $existingEventsResult = $existingEventsQuery->get_result();
+        $existingEvents = [];
+        while ($row = $existingEventsResult->fetch_assoc()) {
+            $existingEvents[] = $row['event_id'];
         }
+
+        // Add new events
+        foreach ($selectedEvents as $event) {
+            if (!in_array($event, $existingEvents)) {
+                $insertEventStmt = $conn->prepare("INSERT INTO event_subscriber_mapping (subscriber_id, event_id) VALUES (?, ?)");
+                $insertEventStmt->bind_param("ii", $subscriberID, $event);
+                $insertEventStmt->execute();
+            }
+        }
+
+        // Remove unselected events
+        foreach ($existingEvents as $event) {
+            if (!in_array($event, $selectedEvents)) {
+                $deleteEventStmt = $conn->prepare("DELETE FROM event_subscriber_mapping WHERE subscriber_id = ? AND event_id = ?");
+                $deleteEventStmt->bind_param("ii", $subscriberID, $event);
+                $deleteEventStmt->execute();
+            }
+        }
+
+        // Update categories (similar to events)
+        $existingCategoriesQuery = $conn->prepare("SELECT category_id FROM event_subscriber_mapping WHERE subscriber_id = ?");
+        $existingCategoriesQuery->bind_param("i", $subscriberID);
+        $existingCategoriesQuery->execute();
+        $existingCategoriesResult = $existingCategoriesQuery->get_result();
+        $existingCategories = [];
+        while ($row = $existingCategoriesResult->fetch_assoc()) {
+            $existingCategories[] = $row['category_id'];
+        }
+
+        // Add new categories
+        foreach ($selectedCategories as $category) {
+            if (!in_array($category, $existingCategories)) {
+                $insertCategoryStmt = $conn->prepare("INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)");
+                $insertCategoryStmt->bind_param("ii", $subscriberID, $category);
+                $insertCategoryStmt->execute();
+            }
+        }
+
+        // Remove unselected categories
+        foreach ($existingCategories as $category) {
+            if (!in_array($category, $selectedCategories)) {
+                $deleteCategoryStmt = $conn->prepare("DELETE FROM event_subscriber_mapping WHERE subscriber_id = ? AND category_id = ?");
+                $deleteCategoryStmt->bind_param("ii", $subscriberID, $category);
+                $deleteCategoryStmt->execute();
+            }
+        }
+
+        // Redirect back to subscribers page after updating
+        header("Location: subscribers.php");
+        exit();
     } else {
         // Error occurred while updating the subscriber details
         $errorMessage = "Error updating subscriber details: " . $conn->error;
     }
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -185,73 +248,85 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Subscriber</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- MultiSelect CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/multiselect@2.1.2/dist/css/multiselect.min.css" rel="stylesheet" />
+
+    <!-- jQuery (needed for MultiSelect) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <!-- MultiSelect JS -->
+    <script src="https://cdn.jsdelivr.net/npm/multiselect@2.1.2/dist/js/multiselect.min.js"></script>
+
+    <!-- Add Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<!-- Add jQuery (required for Select2) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Add Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
+
 </head>
 
-<body>
-    <?php include("header.php"); ?>
-    <!-- Content Wrapper. Contains page content -->
-    <div class="content-wrapper">
-        <div class="container-fluid">
-            <div class="row mb-2">
-                <h2>Edit Subscriber</h2>
-                <?php if (isset($errorMessage)) : ?>
-                    <div class="alert alert-danger" role="alert">
-                        <?php echo $errorMessage; ?>
-                    </div>
-                <?php endif; ?>
-                <form method="POST">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="full_name" class="form-label">Full Name</label>
-                                <input type="text" class="form-control" id="full_name" name="full_name" value="<?php echo $subscriber['full_name']; ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="mobile_number" class="form-label">Mobile Number</label>
-                                <input type="text" class="form-control" id="mobile_number" name="phone_number" value="<?php echo htmlspecialchars($subscriberPhone); ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($subscriberEmail); ?>">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="designation" class="form-label">Designation</label>
-                                <input type="text" class="form-control" id="designation" name="designation" value="<?php echo $subscriber['designation']; ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="organization" class="form-label">Organization</label>
-                                <input type="text" class="form-control" id="organization" name="organization" value="<?php echo $subscriber['organization']; ?>">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="address" class="form-label">Address</label>
-                                <input type="text" class="form-control" id="address" name="address" value="<?php echo $subscriber['address']; ?>">
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Displaying categories associated with events attended -->
-                    <div class="mb-3">
-                        <label for="categories_attended" class="form-label">Categories</label>
-                        <textarea class="form-control" id="categories_attended" name="categories_attended" rows="4"><?php echo $subscriber['categories_attended']; ?></textarea>
-                    </div>
 
-                    <button type="submit" class="btn btn-outline-success">Save</button>
-                </form>
-            </div>
-        </div>
+<body>
+<?php include("header.php"); ?>
+      <!-- Content Wrapper. Contains page content -->
+      <div class="content-wrapper">
+      <div class="container-fluid">
+        <h1>Edit Subscriber Details</h1>
+        <form method="POST">
+    <div class="mb-3">
+        <label for="full_name" class="form-label">Full Name</label>
+        <input type="text" name="full_name" id="full_name" class="form-control" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
     </div>
+    <div class="mb-3">
+        <label for="phone_number" class="form-label">Phone Number</label>
+        <input type="text" name="phone_number" id="phone_number" class="form-control" value="<?php echo htmlspecialchars($subscriberPhone); ?>" required>
+    </div>
+    <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" name="email" id="email" class="form-control" value="<?php echo htmlspecialchars($subscriberEmail); ?>" required>
+    </div>
+
+    <!-- MultiSelect for Events -->
+    <div class="mb-3">
+        <label for="events" class="form-label">Select Events</label>
+        <select name="events[]" id="events" class="form-control" multiple="multiple">
+            <?php foreach ($allEvents as $event) { ?>
+                <option value="<?php echo $event['event_id']; ?>" <?php echo in_array($event['event_name'], $eventsAttended) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($event['event_name']); ?>
+                </option>
+            <?php } ?>
+        </select>
+    </div>
+
+    <!-- MultiSelect for Categories -->
+    <div class="mb-3">
+        <label for="categories" class="form-label">Select Categories</label>
+        <select name="categories[]" id="categories" class="form-control" multiple="multiple">
+            <?php foreach ($allCategories as $category) { ?>
+                <option value="<?php echo $category['category_id']; ?>" <?php echo in_array($category['category_name'], $categoriesAttended) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($category['category_name']); ?>
+                </option>
+            <?php } ?>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+</form>
+
+<script>
+    // Initialize MultiSelect or Select2
+    $(document).ready(function() {
+        $('#events').multiselect(); // or use Select2 if preferred
+        $('#categories').multiselect(); // or use Select2 if preferred
+    });
+</script>
+
+
 </body>
 
 </html>

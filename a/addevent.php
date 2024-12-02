@@ -60,8 +60,8 @@ function getEventList($conn) {
 
 // Function to fetch the number of attendees for a specific event and the number of repeated attendees
 function getEventAttendees($conn, $event_id) {
-    // Fetch the total attendees
-    $sqlTotalAttendees = "SELECT COUNT(*) AS total FROM event_subscriber_mapping WHERE event_id = ?";
+    // Fetch the total unique attendees (distinct subscriber_id for the event)
+    $sqlTotalAttendees = "SELECT COUNT(DISTINCT subscriber_id) AS total FROM event_subscriber_mapping WHERE event_id = ?";
     $stmtTotalAttendees = $conn->prepare($sqlTotalAttendees);
     $stmtTotalAttendees->bind_param("i", $event_id);
     $stmtTotalAttendees->execute();
@@ -69,9 +69,10 @@ function getEventAttendees($conn, $event_id) {
     $rowTotalAttendees = $resultTotalAttendees->fetch_assoc();
     $totalAttendees = $rowTotalAttendees["total"];
 
-    // Fetch the repeated attendees
+    // Fetch the repeated attendees (those who have attended more than once to the event)
     $sqlRepeatedAttendees = "SELECT COUNT(*) AS total FROM (
-        SELECT subscriber_id FROM event_subscriber_mapping WHERE event_id = ? GROUP BY subscriber_id HAVING COUNT(*) > 1
+        SELECT subscriber_id FROM event_subscriber_mapping WHERE event_id = ? 
+        GROUP BY subscriber_id HAVING COUNT(subscriber_id) > 1
     ) AS repeated";
     $stmtRepeatedAttendees = $conn->prepare($sqlRepeatedAttendees);
     $stmtRepeatedAttendees->bind_param("i", $event_id);
@@ -82,6 +83,7 @@ function getEventAttendees($conn, $event_id) {
 
     return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
 }
+
 
 // Function to fetch today's event based on the current date
 function getEventForDate($conn, $today) {
