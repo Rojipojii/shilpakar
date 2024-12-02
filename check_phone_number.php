@@ -16,11 +16,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["mobileNumber"])) {
         INNER JOIN 
             subscribers 
         ON 
-            phone_numbers.subscriber_id = subscribers.id 
+            phone_numbers.subscriber_id = subscribers.subscriber_id 
         LEFT JOIN 
             emails 
         ON 
-            subscribers.id = emails.subscriber_id 
+            subscribers.subscriber_id = emails.subscriber_id 
         WHERE 
             phone_numbers.phone_number = ?
     ";

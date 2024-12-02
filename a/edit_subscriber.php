@@ -278,11 +278,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="container-fluid">
         <h1>Edit Subscriber Details</h1>
         <form method="POST">
-    <div class="mb-3">
+    <div class="col-md-4 mb-3">
         <label for="full_name" class="form-label">Full Name</label>
         <input type="text" name="full_name" id="full_name" class="form-control" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
     </div>
-    <div class="mb-3">
+    <div class=" col-md-4 mb-3">
         <label for="phone_number" class="form-label">Phone Number</label>
         <input type="text" name="phone_number" id="phone_number" class="form-control" value="<?php echo htmlspecialchars($subscriberPhone); ?>" required>
     </div>

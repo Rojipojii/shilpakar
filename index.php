@@ -25,20 +25,22 @@ function fetchEvents($conn)
     return $events;
 }
 
-function insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id = null, $category_id = null, $organizer_id = null)
-{
-    // Convert the email to lowercase
-    $email = strtolower($email);
+function insertData(
+    $conn, $fullName, $mobileNumbers, $emails, $designation, $organization, $address,
+    $number_of_events_attended, $event_id = null, $category_id = null, $organizer_id = null
+) {
+    // Convert emails to lowercase
+    $emails = array_map('strtolower', $emails);
 
-    // Define the SQL statement for inserting into subscribers table
-    $sqlSubscriber = "INSERT INTO subscribers (full_name, phone_number, email, designation, organization, address, number_of_events_attended) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    // Define the SQL statement for inserting into the subscribers table
+    $sqlSubscriber = "INSERT INTO subscribers (full_name, designation, organization, address, number_of_events_attended) VALUES (?, ?, ?, ?, ?)";
 
     // Prepare and execute the subscriber insertion query
     $stmtSubscriber = $conn->prepare($sqlSubscriber);
     if (!$stmtSubscriber) {
         die("Prepare failed: " . $conn->error);
     }
-    $stmtSubscriber->bind_param("ssssssi", $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended);
+    $stmtSubscriber->bind_param("ssssi", $fullName, $designation, $organization, $address, $number_of_events_attended);
     if (!$stmtSubscriber->execute()) {
         die("Execute failed: " . $stmtSubscriber->error);
     }
@@ -46,12 +48,37 @@ function insertData($conn, $fullName, $mobileNumber, $email, $designation, $orga
     // Get the last inserted subscriber ID
     $subscriberId = $stmtSubscriber->insert_id;
 
+    // Insert phone numbers
+    $sqlPhone = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
+    $stmtPhone = $conn->prepare($sqlPhone);
+    if (!$stmtPhone) {
+        die("Prepare failed: " . $conn->error);
+    }
+    foreach ($mobileNumbers as $phoneNumber) {
+        $stmtPhone->bind_param("is", $subscriberId, $phoneNumber);
+        if (!$stmtPhone->execute()) {
+            die("Execute failed: " . $stmtPhone->error);
+        }
+    }
+    $stmtPhone->close();
+
+    // Insert emails
+    $sqlEmail = "INSERT INTO emails (subscriber_id, email) VALUES (?, ?)";
+    $stmtEmail = $conn->prepare($sqlEmail);
+    if (!$stmtEmail) {
+        die("Prepare failed: " . $conn->error);
+    }
+    foreach ($emails as $email) {
+        $stmtEmail->bind_param("is", $subscriberId, $email);
+        if (!$stmtEmail->execute()) {
+            die("Execute failed: " . $stmtEmail->error);
+        }
+    }
+    $stmtEmail->close();
+
     // If event details are provided, insert into event_subscriber_mapping table
     if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
-        // Define the SQL statement for inserting into event_subscriber_mapping table
         $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
-        
-        // Prepare and execute the mapping insertion query
         $stmtMapping = $conn->prepare($sqlMapping);
         if (!$stmtMapping) {
             die("Prepare failed: " . $conn->error);
@@ -60,17 +87,13 @@ function insertData($conn, $fullName, $mobileNumber, $email, $designation, $orga
         if (!$stmtMapping->execute()) {
             die("Execute failed: " . $stmtMapping->error);
         }
-    }
-
-    // Close prepared statements
-    $stmtSubscriber->close();
-    if (isset($stmtMapping)) {
         $stmtMapping->close();
     }
 
+    $stmtSubscriber->close();
+
     return true; // Return true indicating successful insertion
 }
-
 
 function activateEvent($conn)
 {
@@ -131,9 +154,7 @@ if ($multipleEventsAvailable) {
     }
 }
 
-// Handle form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
     $mobileNumber = $_POST["mobileNumber"];
     $fullName = ucwords(strtolower(trim($_POST["fullName"])));
     $email = strtolower(trim($_POST["email"]));
@@ -145,56 +166,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fullName = trim($fullName);
     $address = null; // Set the address to NULL
 
-
     if ($multipleEventsAvailable) {
-        // If multiple events are available, check which event was selected
         $selectedEvent = $_POST["selectedEvent"];
         if (empty($selectedEvent)) {
-            // No event selected, show an error message
             echo "Error: Please select an event to register for.";
         } else {
-            // Fetch event details based on the selected event
             $event = $_SESSION["activatedEvents"][$selectedEvent];
             $event_id = $event["event_id"];
             $category_id = $event["category_id"];
             $organizer_id = $event["organizer_id"];
-    
+
             if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $category_id, $organizer_id)) {
-                // Data inserted successfully, redirect to the subscribers page with full name and event name as parameters
                 $event_name = $event["eventname"];
                 header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
                 exit();
             } else {
-                // Handle the error, if any
                 echo "Error: Failed to insert data into the database.";
             }
         }
     } else {
-        // If there is only one activated event, use the previous logic for a single event
-if ($activatedEvents !== null && count($activatedEvents) === 1) {
-    // Fetch event details based on the single activated event
-    $activatedEvent = reset($activatedEvents); // Get the first (and only) element of the array
-    $event_id = $activatedEvent["event_id"];
-    $category_id = $activatedEvent["category_id"];
-    $organizer_id = $activatedEvent["organizer_id"];
+        if ($activatedEvents !== null && count($activatedEvents) === 1) {
+            $activatedEvent = reset($activatedEvents);
+            $event_id = $activatedEvent["event_id"];
+            $category_id = $activatedEvent["category_id"];
+            $organizer_id = $activatedEvent["organizer_id"];
 
-    if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $category_id, $organizer_id)) {
-        // Data inserted successfully, redirect to the subscribers page with full name as a parameter
-        $event_name = $activatedEvent["eventname"];
-        header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
-        exit();
-    } else {
-        // Handle the error, if any
-        echo "Error: Failed to insert data into the database.";
-    }
+            if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $category_id, $organizer_id)) {
+                $event_name = $activatedEvent["eventname"];
+                header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
+                exit();
+            } else {
+                echo "Error: Failed to insert data into the database.";
+            }
         } else {
-            // If there are no active events, simply insert the user's data without specifying an event
             if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended)) {
-                // Data inserted successfully, redirect to the subscribers page with full name as a parameter
                 header("Location: registration_success.php?name=" . urlencode($fullName));
                 exit();
             } else {
-                // Handle the error, if any
                 echo "Error: Failed to insert data into the database.";
             }
         }
@@ -293,62 +301,6 @@ if ($activatedEvents !== null && count($activatedEvents) === 1) {
 </div>
 
 <button type="submit" class="btn btn-outline-success" value="Register">Submit</button>
-
-<!-- <script>
-    function checkPhoneNumber() {
-        const mobileNumber = document.getElementById("mobileNumber").value;
-        const mobileError = document.getElementById("mobileError");
-        const fullName = document.getElementById("fullName");
-        const email = document.getElementById("email");
-        const designation = document.getElementById("designation");
-        const organization = document.getElementById("organization");
-
-        if (mobileNumber.length === 10) {
-            // Make an AJAX call to check_phone_number.php
-            fetch("check_phone_number.php", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `mobileNumber=${mobileNumber}`,
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Populate the fields with subscriber details
-                        const user = data.user;
-                        fullName.value = user.name || ""; // Replace `name` with the actual field in your DB
-                        email.value = user.email || "";   // Replace `email` with the fetched email
-                        designation.value = user.designation || ""; // Replace `designation` with the actual field
-                        organization.value = user.organization || ""; // Replace `organization` with the actual field
-                        mobileError.textContent = ""; // Clear any previous error
-                    } else {
-                        // Clear fields if no subscriber found
-                        fullName.value = "";
-                        email.value = "";
-                        designation.value = "";
-                        organization.value = "";
-                        mobileError.textContent = "No subscriber found for this phone number.";
-                    }
-                })
-                .catch(error => {
-                    console.error("Error:", error);
-                    mobileError.textContent = "An error occurred while checking the phone number.";
-                });
-        } else {
-            // Clear fields if mobile number is invalid
-            fullName.value = "";
-            email.value = "";
-            designation.value = "";
-            organization.value = "";
-            mobileError.textContent = "Enter a valid 10-digit mobile number.";
-        }
-    }
-</script> -->
-
-
-
-
 <script>
     function validateForm() {
         // Get the mobile number input and error message span
