@@ -526,9 +526,6 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
 
             </ul>
         </div>
-        <div class="card-footer text-center">
-            <a href="subscribers.php">View All Attendees</a>
-        </div>
     </div>
 </div>
 </div>

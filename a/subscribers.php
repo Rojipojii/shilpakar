@@ -217,20 +217,36 @@ $eventFilter = isset($_GET['event_id']) ? $_GET['event_id'] : '';
 // Modify the SQL query based on the event filter
 if (!empty($eventFilter)) {
     // Modify your SQL query to filter records based on the selected event
-    $sql = "SELECT subscribers.*, COUNT(*) AS number_of_events_attended 
-            FROM subscribers 
-            INNER JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
-            WHERE event_subscriber_mapping.event_id = ? 
-            GROUP BY subscribers.subscriber_id
-            ORDER BY subscribers.subscriber_id DESC";           
+    $sql = "SELECT 
+                subscribers.*
+            FROM 
+                subscribers
+            WHERE 
+                subscribers.subscriber_id IN (
+                    SELECT 
+                        subscriber_id
+                    FROM 
+                        event_subscriber_mapping
+                    WHERE 
+                        event_id = ?
+                );
+    "; 
 } else if (!empty($categoryFilter)) {
     // Modify your SQL query to filter records based on the selected category
-    $sql = "SELECT subscribers.*, COUNT(*) AS number_of_events_attended 
-            FROM subscribers 
-            INNER JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
-            WHERE event_subscriber_mapping.category_id = ? 
-            GROUP BY subscribers.subscriber_id
-            ORDER BY subscribers.subscriber_id DESC";    
+    $sql = "SELECT 
+    subscribers.*, 
+    COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+FROM 
+    subscribers
+LEFT JOIN 
+    event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
+WHERE 
+    subscribers.category_id = ? -- Replace with the actual category you're filtering by
+GROUP BY 
+    subscribers.subscriber_id
+ORDER BY 
+    subscribers.subscriber_id DESC;
+";    
 } else if (!empty($organizerFilter)) {
     // Modify your SQL query to filter records based on the selected organizer
     $sql = "SELECT subscribers.*, COUNT(*) AS number_of_events_attended 
