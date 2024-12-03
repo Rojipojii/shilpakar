@@ -29,71 +29,116 @@ function insertData(
     $conn, $fullName, $mobileNumbers, $emails, $designation, $organization, $address,
     $number_of_events_attended, $event_id = null, $category_id = null, $organizer_id = null
 ) {
+
+    // Ensure $mobileNumbers is an array
+    if (!is_array($mobileNumbers)) {
+        $mobileNumbers = [$mobileNumbers]; // Wrap the string into an array
+    }
+
     // Convert emails to lowercase
+    if (!is_array($emails)) {
+        $emails = [$emails]; // Wrap the string into an array
+    }
     $emails = array_map('strtolower', $emails);
 
-    // Define the SQL statement for inserting into the subscribers table
-    $sqlSubscriber = "INSERT INTO subscribers (full_name, designation, organization, address, number_of_events_attended) VALUES (?, ?, ?, ?, ?)";
+    // Initialize subscriber ID
+    $subscriberId = null;
 
-    // Prepare and execute the subscriber insertion query
-    $stmtSubscriber = $conn->prepare($sqlSubscriber);
-    if (!$stmtSubscriber) {
-        die("Prepare failed: " . $conn->error);
+    // Use WHERE IN clause to check if any of the provided phone numbers already exist in the database
+    $placeholders = implode(',', array_fill(0, count($mobileNumbers), '?'));
+    $sqlCheckPhone = "SELECT subscriber_id FROM phone_numbers WHERE phone_number IN ($placeholders)";
+    $stmtCheckPhone = $conn->prepare($sqlCheckPhone);
+    if (!$stmtCheckPhone) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
     }
-    $stmtSubscriber->bind_param("ssssi", $fullName, $designation, $organization, $address, $number_of_events_attended);
-    if (!$stmtSubscriber->execute()) {
-        die("Execute failed: " . $stmtSubscriber->error);
+
+    // Bind parameters dynamically
+    $types = str_repeat('s', count($mobileNumbers));
+    $stmtCheckPhone->bind_param($types, ...$mobileNumbers);
+    $stmtCheckPhone->execute();
+    $result = $stmtCheckPhone->get_result();
+
+    // Check if a matching phone number exists and fetch the subscriber ID
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $subscriberId = $row['subscriber_id'];
+        error_log("Matching phone number found. Using existing subscriber ID: $subscriberId");
+    } else {
+        error_log("No matching phone number found. Creating a new subscriber.");
+    }
+    $stmtCheckPhone->close();
+
+    // If no existing subscriber ID was found, create a new one
+    if ($subscriberId === null) {
+        $sqlSubscriber = "INSERT INTO subscribers (full_name, designation, organization, address, number_of_events_attended) VALUES (?, ?, ?, ?, ?)";
+        $stmtSubscriber = $conn->prepare($sqlSubscriber);
+        if (!$stmtSubscriber) {
+            error_log("Prepare failed: " . $conn->error);
+            return false;
+        }
+        $stmtSubscriber->bind_param("ssssi", $fullName, $designation, $organization, $address, $number_of_events_attended);
+        if (!$stmtSubscriber->execute()) {
+            error_log("Execute failed: " . $stmtSubscriber->error);
+            return false;
+        }
+        $subscriberId = $stmtSubscriber->insert_id;
+        $stmtSubscriber->close();
+        error_log("New subscriber created with ID: $subscriberId");
     }
 
-    // Get the last inserted subscriber ID
-    $subscriberId = $stmtSubscriber->insert_id;
-
-    // Insert phone numbers
+    // Insert phone numbers for the found or newly created subscriber ID
     $sqlPhone = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
     $stmtPhone = $conn->prepare($sqlPhone);
     if (!$stmtPhone) {
-        die("Prepare failed: " . $conn->error);
+        error_log("Prepare failed: " . $conn->error);
+        return false;
     }
     foreach ($mobileNumbers as $phoneNumber) {
         $stmtPhone->bind_param("is", $subscriberId, $phoneNumber);
         if (!$stmtPhone->execute()) {
-            die("Execute failed: " . $stmtPhone->error);
+            error_log("Execute failed: " . $stmtPhone->error);
+            return false;
         }
     }
     $stmtPhone->close();
 
-    // Insert emails
+    // Insert emails for the found or newly created subscriber ID
     $sqlEmail = "INSERT INTO emails (subscriber_id, email) VALUES (?, ?)";
+
     $stmtEmail = $conn->prepare($sqlEmail);
     if (!$stmtEmail) {
-        die("Prepare failed: " . $conn->error);
+        error_log("Prepare failed: " . $conn->error);
+        return false;
     }
     foreach ($emails as $email) {
         $stmtEmail->bind_param("is", $subscriberId, $email);
         if (!$stmtEmail->execute()) {
-            die("Execute failed: " . $stmtEmail->error);
+            error_log("Execute failed: " . $stmtEmail->error);
+            return false;
         }
     }
     $stmtEmail->close();
 
-    // If event details are provided, insert into event_subscriber_mapping table
+    // If event details are provided, insert into the event_subscriber_mapping table
     if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
         $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
         $stmtMapping = $conn->prepare($sqlMapping);
         if (!$stmtMapping) {
-            die("Prepare failed: " . $conn->error);
+            error_log("Prepare failed: " . $conn->error);
+            return false;
         }
         $stmtMapping->bind_param("iiii", $subscriberId, $event_id, $organizer_id, $category_id);
         if (!$stmtMapping->execute()) {
-            die("Execute failed: " . $stmtMapping->error);
+            error_log("Execute failed: " . $stmtMapping->error);
+            return false;
         }
         $stmtMapping->close();
     }
 
-    $stmtSubscriber->close();
-
     return true; // Return true indicating successful insertion
 }
+
 
 function activateEvent($conn)
 {
