@@ -241,13 +241,23 @@ if (!empty($eventFilter)) {
             ORDER BY subscribers.subscriber_id DESC";
 } else if ($filter === 'repeated') {
     // Modify the SQL query based on the filter for repeated records using phone numbers and emails
-    $sql = "SELECT subscribers.subscriber_id, COALESCE(phone_numbers.phone_number, emails.email) AS contact, 
-            COUNT(*) AS number_of_events_attended 
-            FROM subscribers
-            LEFT JOIN phone_numbers ON subscribers.subscriber_id = phone_numbers.subscriber_id
-            LEFT JOIN emails ON subscribers.subscriber_id = emails.subscriber_id
-            GROUP BY contact
-            HAVING COUNT(*) > 1";
+    $sql = "SELECT 
+    subscribers.*, 
+    COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+FROM 
+    subscribers
+LEFT JOIN 
+    event_subscriber_mapping 
+ON 
+    subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
+GROUP BY 
+    subscribers.subscriber_id
+HAVING 
+    COUNT(event_subscriber_mapping.subscriber_id) > 1
+ORDER BY 
+    subscribers.subscriber_id DESC;
+;
+";
 } else {
     $sql = "
     SELECT 
@@ -261,7 +271,6 @@ if (!empty($eventFilter)) {
         subscribers.subscriber_id
     ORDER BY 
         subscribers.subscriber_id DESC";
-
 }
 
 
