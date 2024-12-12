@@ -17,27 +17,61 @@ date_default_timezone_set("Asia/Kathmandu");
 
 // Function to retrieve data from the database, excluding entries with missing or invalid email addresses and phone numbers
 function fetchData($conn) {
-    $sql = "SELECT * FROM subscribers WHERE 
-            email IS NOT NULL AND email <> '' AND
-            phone_number IS NOT NULL AND
-            phone_number REGEXP '^[0-9]+$'";
+    $sql = "
+        SELECT s.* 
+        FROM subscribers s
+        INNER JOIN emails e ON s.subscriber_id = e.subscriber_id
+        INNER JOIN phone_numbers p ON s.subscriber_id = p.subscriber_id
+        WHERE 
+            e.email IS NOT NULL AND e.email <> '' AND
+            p.phone_number IS NOT NULL AND
+            p.phone_number REGEXP '^[0-9]+$'
+    ";
     $result = $conn->query($sql);
     return $result;
 }
 
+function getEmails($conn, $subscriberId) {
+    $sql = "SELECT email FROM emails WHERE subscriber_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $subscriberId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+function getPhoneNumbers($conn, $subscriberId) {
+    $sql = "SELECT phone_number FROM phone_numbers WHERE subscriber_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $subscriberId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
+
+
 // Function to generate vCard data
-function generateVCard($row) {
+function generateVCard($row, $emails, $phoneNumbers) {
     $vcard = "BEGIN:VCARD\r\n";
     $vcard .= "VERSION:3.0\r\n";
     $vcard .= "FN:" . $row["full_name"] . "\r\n";
-    $vcard .= "TEL:" . $row["phone_number"] . "\r\n";
-    $vcard .= "EMAIL:" . $row["email"] . "\r\n";
+
+    // Add all phone numbers to the vCard
+    foreach ($phoneNumbers as $phone) {
+        $vcard .= "TEL:" . $phone . "\r\n";
+    }
+
+    // Add all email addresses to the vCard
+    foreach ($emails as $email) {
+        $vcard .= "EMAIL:" . $email . "\r\n";
+    }
 
     // Check if the "Organization" field is not empty before adding it to vCard
     if (!empty($row["organization"])) {
         $vcard .= "ORG:" . $row["organization"] . "\r\n";
     } else {
-        $vcard .= "ORG:;"; // Set "ORG" to null
+        $vcard .= "ORG:;\r\n"; // Set "ORG" to null
     }
 
     $vcard .= "TITLE:" . $row["designation"] . "\r\n";
@@ -62,11 +96,19 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
 
         // Output CSV header
         $output = fopen('php://output', 'w');
-        fputcsv($output, ["Full Name", "Mobile Number", "Email", "Designation", "Organization"]);
+        fputcsv($output, ["Full Name", "Phone Numbers", "Emails", "Designation", "Organization"]);
 
         // Add data from the database to the CSV
         while ($row = $result->fetch_assoc()) {
-            fputcsv($output, [$row["full_name"], $row["phone_number"], $row["email"], $row["designation"], $row["organization"]]);
+            // Fetch emails and phone numbers for this subscriber
+            $emails = array_column(getEmails($conn, $row['subscriber_id']), 'email');
+            $phoneNumbers = array_column(getPhoneNumbers($conn, $row['subscriber_id']), 'phone_number');
+
+            // Combine multiple emails and phone numbers into a comma-separated string
+            $emailString = implode(", ", $emails);
+            $phoneNumberString = implode(", ", $phoneNumbers);
+
+            fputcsv($output, [$row["full_name"], $phoneNumberString, $emailString, $row["designation"], $row["organization"]]);
         }
 
         fclose($output);
@@ -77,7 +119,7 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
         $sheet = $spreadsheet->getActiveSheet();
 
         // Set headers
-        $headers = ["ID", "Full Name", "Mobile Number", "Email", "Designation", "Organization"];
+        $headers = ["ID", "Full Name", "Phone Numbers", "Emails", "Designation", "Organization"];
         $sheet->fromArray([$headers], null, 'A1');
 
         // Fetch data from the database
@@ -86,7 +128,15 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
         // Add data from the database to the XLSX file
         $rowIndex = 2;
         while ($row = $result->fetch_assoc()) {
-            $data = [$row["subscriber_id"], $row["full_name"], $row["phone_number"], $row["email"], $row["designation"], $row["organization"]];
+            // Fetch emails and phone numbers for this subscriber
+            $emails = array_column(getEmails($conn, $row['subscriber_id']), 'email');
+            $phoneNumbers = array_column(getPhoneNumbers($conn, $row['subscriber_id']), 'phone_number');
+
+            // Combine multiple emails and phone numbers into a comma-separated string
+            $emailString = implode(", ", $emails);
+            $phoneNumberString = implode(", ", $phoneNumbers);
+
+            $data = [$row["subscriber_id"], $row["full_name"], $phoneNumberString, $emailString, $row["designation"], $row["organization"]];
             $sheet->fromArray([$data], null, "A$rowIndex");
             $rowIndex++;
         }
@@ -113,7 +163,11 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
 
         // Generate vCard for each row and append to the $allVCards string
         while ($row = $result->fetch_assoc()) {
-            $allVCards .= generateVCard($row);
+            // Fetch emails and phone numbers for this subscriber
+            $emails = array_column(getEmails($conn, $row['id']), 'email');
+            $phoneNumbers = array_column(getPhoneNumbers($conn, $row['id']), 'phone_number');
+
+            $allVCards .= generateVCard($row, $emails, $phoneNumbers);
         }
 
         // Output the combined vCard data

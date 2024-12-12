@@ -249,24 +249,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Subscriber</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- MultiSelect CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/multiselect@2.1.2/dist/css/multiselect.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-beta.1/css/select2.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-beta.1/js/select2.min.js"></script>
+    <style>
+        .form-group {
+            margin: 20px;
+        }
+    </style>
 
-    <!-- jQuery (needed for MultiSelect) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <!-- MultiSelect JS -->
-    <script src="https://cdn.jsdelivr.net/npm/multiselect@2.1.2/dist/js/multiselect.min.js"></script>
-
-    <!-- Add Select2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/css/select2.min.css" rel="stylesheet" />
-
-<!-- Add jQuery (required for Select2) -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-<!-- Add Select2 JS -->
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
 
 </head>
 
@@ -277,54 +269,94 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="content-wrapper">
       <div class="container-fluid">
         <h1>Edit Subscriber Details</h1>
-        <form method="POST">
-    <div class="col-md-4 mb-3">
-        <label for="full_name" class="form-label">Full Name</label>
-        <input type="text" name="full_name" id="full_name" class="form-control" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
-    </div>
-    <div class=" col-md-4 mb-3">
-        <label for="phone_number" class="form-label">Phone Number</label>
-        <input type="text" name="phone_number" id="phone_number" class="form-control" value="<?php echo htmlspecialchars($subscriberPhone); ?>" required>
-    </div>
-    <div class="mb-3">
-        <label for="email" class="form-label">Email</label>
-        <input type="email" name="email" id="email" class="form-control" value="<?php echo htmlspecialchars($subscriberEmail); ?>" required>
-    </div>
-
-    <!-- MultiSelect for Events -->
-    <div class="mb-3">
-        <label for="events" class="form-label">Select Events</label>
-        <select name="events[]" id="events" class="form-control" multiple="multiple">
-            <?php foreach ($allEvents as $event) { ?>
-                <option value="<?php echo $event['event_id']; ?>" <?php echo in_array($event['event_name'], $eventsAttended) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($event['event_name']); ?>
-                </option>
-            <?php } ?>
-        </select>
+        <form method="POST" class="container mt-4">
+    <div class="row">
+        <!-- Name and Phone Number -->
+        <div class="col-md-6 mb-3">
+            <label for="full_name" class="form-label">Full Name</label>
+            <input type="text" name="full_name" id="full_name" class="form-control" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="phone_number" class="form-label">Phone Number</label>
+            <input type="text" name="phone_number" id="phone_number" class="form-control" value="<?php echo htmlspecialchars($subscriberPhone); ?>" required>
+        </div>
     </div>
 
-    <!-- MultiSelect for Categories -->
-    <div class="mb-3">
-        <label for="categories" class="form-label">Select Categories</label>
-        <select name="categories[]" id="categories" class="form-control" multiple="multiple">
-            <?php foreach ($allCategories as $category) { ?>
-                <option value="<?php echo $category['category_id']; ?>" <?php echo in_array($category['category_name'], $categoriesAttended) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($category['category_name']); ?>
-                </option>
-            <?php } ?>
-        </select>
+    <div class="row">
+        <!-- Email and Designation -->
+        <div class="col-md-6 mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" name="email" id="email" class="form-control" value="<?php echo htmlspecialchars($subscriberEmail); ?>" required>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="designation" class="form-label">Designation</label>
+            <input type="text" name="designation" id="designation" class="form-control" value="<?php echo htmlspecialchars($subscriber['designation']); ?>">
+        </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <div class="row">
+        <!-- Organization -->
+        <div class="col-md-12 mb-3">
+            <label for="organization" class="form-label">Organization</label>
+            <input type="text" name="organization" id="organization" class="form-control" value="<?php echo htmlspecialchars($subscriber['organization']); ?>" >
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- MultiSelect for Events -->
+        <div class="col-md-6 mb-3">
+            <label for="events" class="form-label">Select Events</label>
+            <select name="events[]" id="events" class="form-control select2" multiple="multiple">
+                <?php foreach ($allEvents as $event) { ?>
+                    <option value="<?php echo $event['event_id']; ?>" <?php echo in_array($event['event_name'], $eventsAttended) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($event['event_name']); ?>
+                    </option>
+                <?php } ?>
+            </select>
+        </div>
+
+        <!-- MultiSelect for Categories -->
+        <div class="col-md-6 mb-3">
+            <label for="categories" class="form-label">Select Categories</label>
+            <select name="categories[]" id="categories" class="form-control select2" multiple="multiple">
+                <?php foreach ($allCategories as $category) { ?>
+                    <option value="<?php echo $category['category_id']; ?>" <?php echo in_array($category['category_name'], $categoriesAttended) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($category['category_name']); ?>
+                    </option>
+                <?php } ?>
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Submit Button -->
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-primary w-100">Save Changes</button>
+        </div>
+    </div>
 </form>
 
 <script>
-    // Initialize MultiSelect or Select2
     $(document).ready(function() {
-        $('#events').multiselect(); // or use Select2 if preferred
-        $('#categories').multiselect(); // or use Select2 if preferred
+        // Initialize Select2 for categories
+        $('#categories').select2({
+            placeholder: "Pick value",   // Placeholder text for categories
+            allowClear: true,           // Option to clear selection
+            tags: true,                 // Enable tagging
+            width: '100%'               // Ensure it fits the container
+        });
+
+        // Initialize Select2 for events
+        $('#events').select2({
+            placeholder: "Pick value",   // Placeholder text for events
+            allowClear: true,           // Option to clear selection
+            tags: true,                 // Enable tagging
+            width: '100%'               // Ensure it fits the container
+        });
     });
 </script>
+
+
 
 
 </body>

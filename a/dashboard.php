@@ -487,20 +487,18 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
             // SQL query to retrieve the top 10 attendees based on the number of events attended
             $sqlTopAttendees = "
                 SELECT 
-                    s.subscriber_id,
-                    (SELECT full_name 
-                     FROM subscribers 
-                     WHERE subscriber_id = s.subscriber_id
-                     LIMIT 1) AS full_name,
-                    COUNT(esm.event_id) AS number_of_events_attended
-                FROM 
-                    event_subscriber_mapping esm
-                INNER JOIN subscribers s ON esm.subscriber_id = s.subscriber_id
-                GROUP BY 
-                    s.subscriber_id
-                ORDER BY 
-                    number_of_events_attended DESC
-                LIMIT 10";
+    subscribers.*, 
+    COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+FROM 
+    subscribers
+LEFT JOIN 
+    event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
+GROUP BY 
+    subscribers.subscriber_id
+ORDER BY 
+    number_of_events_attended DESC
+LIMIT 10
+";
             
             $resultTopAttendees = $conn->query($sqlTopAttendees);
 
