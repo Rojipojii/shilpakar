@@ -178,76 +178,54 @@ $totalEvents = $rowTotalEvents["total"];
 $totalPages = ceil($totalEvents / $pageSize);
 
 function getEventAttendees($conn, $event_id = null, $category_id = null, $organizer_id = null) {
-    // Base query to count total attendees for a specific event
+    // Base query to count total attendees
     $sql = "SELECT COUNT(*) AS total FROM event_subscriber_mapping WHERE event_id = ?";
+    $types = "i"; // Start with event_id type
+    $params = [$event_id];
 
-    // Add conditions based on provided category_id and organizer_id
     if ($category_id !== null) {
         $sql .= " AND category_id = ?";
+        $types .= "i";
+        $params[] = $category_id;
     }
     if ($organizer_id !== null) {
         $sql .= " AND organizer_id = ?";
+        $types .= "i";
+        $params[] = $organizer_id;
     }
 
-    // Prepare the statement
+    // Prepare and bind parameters
     $stmt = $conn->prepare($sql);
+    $stmt->bind_param($types, ...$params);
 
-    // Bind parameters based on the provided IDs
-    if ($category_id !== null && $organizer_id !== null) {
-        $stmt->bind_param("iii", $event_id, $category_id, $organizer_id);
-    } elseif ($category_id !== null) {
-        $stmt->bind_param("ii", $event_id, $category_id);
-    } elseif ($organizer_id !== null) {
-        $stmt->bind_param("ii", $event_id, $organizer_id);
-    } else {
-        // Only event_id is provided
-        $stmt->bind_param("i", $event_id);
-    }
-
-    // Execute the statement and fetch the result
+    // Execute and fetch the result
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result->fetch_assoc();
     $totalAttendees = $row["total"];
 
-
-   // Fetch the repeated attendees if both category ID and organizer ID are provided
-/// Initialize variable to store the count of repeated attendees
-$repeatedAttendees = 0;
-
-// Check if event_id is provided
-if ($event_id !== null) {
-    // SQL query to find repeated attendees for the same event
+    // Repeated attendees query
+    $repeatedAttendees = 0;
     $sqlRepeatedAttendees = "
-    SELECT COUNT(*) AS repeated_attendees
-    FROM (
-        SELECT subscriber_id
-        FROM event_subscriber_mapping
-        WHERE event_id = ? 
-        GROUP BY subscriber_id
-        HAVING COUNT(*) > 1
-    ) AS repeated_attendees";
+        SELECT COUNT(DISTINCT esm1.subscriber_id) AS repeated_attendees
+        FROM event_subscriber_mapping esm1
+        INNER JOIN event_subscriber_mapping esm2
+        ON esm1.subscriber_id = esm2.subscriber_id
+        WHERE esm1.event_id = ?
+        AND esm2.event_id != esm1.event_id;
 
-    // Prepare the SQL statement
+    ";
+
     $stmtRepeatedAttendees = $conn->prepare($sqlRepeatedAttendees);
-
-    // Bind parameter: event_id
     $stmtRepeatedAttendees->bind_param("i", $event_id);
-
-    // Execute the statement
     $stmtRepeatedAttendees->execute();
-    
-    // Get the result
     $resultRepeatedAttendees = $stmtRepeatedAttendees->get_result();
-    
-    // Fetch the result and extract the count of repeated attendees
     $rowRepeatedAttendees = $resultRepeatedAttendees->fetch_assoc();
     $repeatedAttendees = $rowRepeatedAttendees["repeated_attendees"];
+
+    return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
 }
 
-// Return the total and repeated attendees
-return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
-}
 
 ?>
 
@@ -347,13 +325,14 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
         if (!empty($category)) {
             $totalPeopleByCategory = getTotalPeopleByCategory($conn, $category);
             // Output the total count and create a link to the subscribers page with the selected category filter
-            echo "<a href='subscribers.php?category=$category'>$totalPeopleByCategory</a>";
+            echo "<a href='subscribers.php?category_id=$category'>$totalPeopleByCategory</a>";
+
         }
         ?>
         <div class="input-group">
             <select name="category" id="category" class="form-select">
                 <!-- Option for "All" categories -->
-                <option value="all" <?php if ($category === "all") echo "selected"; ?>>All</option>
+                <!-- <option value="all" <?php if ($category === "all") echo "selected"; ?>></option> -->
                 <?php
                 // Loop through the category list and display the categories in the select dropdown
                 foreach ($categoryList as $cat) {
@@ -379,7 +358,7 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
                 if (!empty($organizer)) {
                     $totalPeopleByOrganizer = getTotalPeopleByOrganizer($conn, $organizer);
                     // Output the total count and create a link to the subscribers page with the selected organizer filter
-                    echo "<a href='subscribers.php?organizer=$organizer'>$totalPeopleByOrganizer</a>";
+                    echo "<a href='subscribers.php?organizer_id=$organizer'>$totalPeopleByOrganizer</a>";
                 }
                 ?>
                 <div class="input-group">
@@ -411,9 +390,8 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
            <!-- List of Latest Events -->
 <div class="card">
     <div class="card-header">
-        <h3 class="card-title">Top 8 Latest Events</h3>
+        <h3 class="card-title">Latest Events</h3>
         <div class="card-tools">
-            <span class="badge badge-success">Top 8</span>
             <?php
             $prevPage = max(1, $currentPage - 1);
             $nextPage = $currentPage + 1;
@@ -442,8 +420,11 @@ return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
                 $totalAttendees = $eventAttendees["total"];
                 $repeatedAttendees = $eventAttendees["repeated"];
 
-                // Construct the URL with the total number of attendees as a parameter
-                $eventUrl = 'subscribers.php?event_id=' . $event_id . '&total_attendees=' . $totalAttendees;
+                // URL encode the event name to ensure safe inclusion in the URL
+            //    $encodedEventName = urlencode($event_name);
+
+                // Construct the URL with the event name as a parameter
+                $eventUrl = 'subscribers.php?event_id=' . $event_id ;
 
                 echo '<li>';
                 echo '<a class="users-list-name" href="' . $eventUrl . '">' . $rowLatestEvent["event_name"] . '</a>';

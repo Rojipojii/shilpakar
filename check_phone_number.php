@@ -8,22 +8,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["mobileNumber"])) {
 
     // Query to fetch subscriber details and their email
     $sql = "
-        SELECT 
-            subscribers.*, 
-            emails.email 
-        FROM 
-            phone_numbers 
-        INNER JOIN 
-            subscribers 
-        ON 
-            phone_numbers.subscriber_id = subscribers.subscriber_id 
-        LEFT JOIN 
-            emails 
-        ON 
-            subscribers.subscriber_id = emails.subscriber_id 
-        WHERE 
-            phone_numbers.phone_number = ?
-    ";
+    SELECT 
+        subscribers.*, 
+        emails.email, 
+        designation_organization.designation AS designation, 
+        designation_organization.organization AS organization
+    FROM 
+        phone_numbers 
+    INNER JOIN 
+        subscribers 
+    ON 
+        phone_numbers.subscriber_id = subscribers.subscriber_id 
+    LEFT JOIN 
+        emails 
+    ON 
+        subscribers.subscriber_id = emails.subscriber_id 
+    LEFT JOIN 
+        designation_organization 
+    ON 
+        subscribers.subscriber_id = designation_organization.subscriber_id 
+    WHERE 
+        phone_numbers.phone_number = ?
+";
+
 
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $mobileNumber);

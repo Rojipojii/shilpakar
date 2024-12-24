@@ -134,7 +134,7 @@
                 </li>
                 <li class="nav-item">
                     <a href="merge.php" class="nav-link">
-                        <i class="bi bi-file-earmark-check"></i>
+                        <i class="bi bi-intersect"></i>
                         <p>Merge</p>
                     </a>
                 </li>

@@ -168,7 +168,8 @@ $categories = fetchCategoriesWithAttendees($conn);
         </form>
 
         <!-- Display existing categories with total attendees -->
-        <h2 class="mt-4">Existing Categories:</h2>
+        <h2 class="mt-4">Categories: <?= count($categories); ?></h2>
+        
         <table class="table">
             <thead>
                 <tr>
@@ -179,31 +180,32 @@ $categories = fetchCategoriesWithAttendees($conn);
                 </tr>
             </thead>
             <tbody>
-               
-                
-                <?php
-                foreach ($categories as $category) {
-                    $categoryId = $category["category_id"];
-                    $categoryName = $category["category_name"];
-                    $fetchCategoriesWithAttendees = $category["total_attendees"];
-                    $totalEvents = $category["total_events"];
+    <?php
+    foreach ($categories as $category) {
+        $categoryId = $category["category_id"];
+        $categoryName = $category["category_name"];
+        $fetchCategoriesWithAttendees = $category["total_attendees"];
+        $totalEvents = $category["total_events"];
 
-                    echo "<tr>";
-                    echo "<td>";
-                    echo "<span class='category-name' data-category-id='$categoryId'>$categoryName</span>";
-                    echo "</td>";
-                    echo "<td>";
-                    echo "<a href='subscribers.php?category=$categoryId'>$fetchCategoriesWithAttendees</a>";
-                    echo "</td>";
-                    echo "<td>$totalEvents</td>";
-                    echo "<td>";
-                    echo "<button class='edit-category btn btn-outline-warning' data-category-id='$categoryId'><i class='bi bi-pencil-square'></i></button>";
-                    echo "<button class='save-category btn btn-outline-success' data-category-id='$categoryId' style='display: none;'><i class='bi bi-check2-square'></i></button>";
-                    echo "</td>";
-                    echo "</tr>";
-                }
-                ?>
-            </tbody>
+        echo "<tr>";
+        echo "<td>";
+        // Make the category name a hyperlink
+        echo "<a href='subscribers.php?category_id=$categoryId' class='category-name' data-category-id='$categoryId'>$categoryName</a>";
+        echo "</td>";
+        echo "<td>";
+        // Display attendees count without a hyperlink
+        echo "$fetchCategoriesWithAttendees";
+        echo "</td>";
+        echo "<td>$totalEvents</td>";
+        echo "<td>";
+        echo "<button class='edit-category btn btn-outline-primary' data-category-id='$categoryId'><i class='bi bi-pencil-square'></i></button>";
+        echo "<button class='save-category btn btn-outline-success' data-category-id='$categoryId' style='display: none;'><i class='bi bi-check2-square'></i></button>";
+        echo "</td>";
+        echo "</tr>";
+    }
+    ?>
+</tbody>
+
         </table>
         <div id="successMessage" class="alert alert-success" style="display: none;">Category updated successfully</div>
 

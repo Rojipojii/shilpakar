@@ -14,15 +14,22 @@ require_once "db.php"; // Include the database connection file
 // Function to fetch organizers and their total number of attendees from the database
 function fetchOrganizersWithAttendees($conn)
 {
-    $sql = "SELECT organizers.organizer_id, 
-               organizers.organizer_name, 
-               COUNT(DISTINCT events.event_id) AS total_events,
-               COUNT(event_subscriber_mapping.subscriber_id) AS total_attendees
-        FROM organizers
-        LEFT JOIN events ON organizers.organizer_id = events.organizer_id
-        LEFT JOIN event_subscriber_mapping ON events.event_id = event_subscriber_mapping.event_id
-        GROUP BY organizers.organizer_id, organizers.organizer_name";
-
+    $sql = "SELECT 
+    organizers.organizer_id, 
+    organizers.organizer_name, 
+    COUNT(DISTINCT events.event_id) AS total_events,
+    (
+        SELECT COUNT(*)
+        FROM event_subscriber_mapping 
+        WHERE organizers.organizer_id = event_subscriber_mapping.organizer_id
+    ) AS total_attendees
+FROM 
+    organizers
+LEFT JOIN 
+    events ON organizers.organizer_id = events.organizer_id
+GROUP BY
+    organizers.organizer_id, organizers.organizer_name;
+";
 
     $result = $conn->query($sql);
 
@@ -154,7 +161,7 @@ $organizers = fetchOrganizersWithAttendees($conn);
                             <button type="submit" name="addOrganizer" class="btn btn-outline-success">Add Organizer</button>
                         </form>
                         <!-- Display existing organizers with total attendees -->
-                        <h2 class="mt-4">Existing Organizers:</h2>
+                        <h2 class="mt-4">Organizers:</h2>
                         <table class="table">
                             <thead>
                                 <tr>
@@ -165,29 +172,32 @@ $organizers = fetchOrganizersWithAttendees($conn);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php
-                                foreach ($organizers as $organizer) {
-                                    $organizerId = $organizer["organizer_id"];
-                                    $organizerName = $organizer["organizer_name"];
-                                    $fetchOrganizersWithAttendees = $organizer["total_attendees"];
-                                    $totalEvents = $organizer["total_events"];
+    <?php
+    foreach ($organizers as $organizer) {
+        $organizerId = $organizer["organizer_id"];
+        $organizerName = $organizer["organizer_name"];
+        $fetchOrganizersWithAttendees = $organizer["total_attendees"];
+        $totalEvents = $organizer["total_events"];
 
-                                    echo "<tr>";
-                                    echo "<td>";
-                                    echo "<span class='organizer-name' data-organizer-id='$organizerId'>$organizerName</span>";
-                                    echo "</td>";
-                                    echo "<td>";
-                                    echo "<a href='subscribers.php?organizer=$organizerId'>$fetchOrganizersWithAttendees</a>";
-                                    echo "</td>";
-                                    echo "<td>$totalEvents</td>";
-                                    echo "<td>";
-                                    echo "<button class='edit-organizer btn btn-outline-warning' data-organizer-id='$organizerId'><i class='bi bi-pencil-square'></i></button>";
-                                    echo "<button class='save-organizer btn btn-outline-success' data-organizer-id='$organizerId' style='display: none;'><i class='bi bi-check2-square'></button>";
-                                    echo "</td>";
-                                    echo "</tr>";
-                                }
-                                ?>
-                            </tbody>
+        echo "<tr>";
+        echo "<td>";
+        // Make the organizer name a hyperlink
+        echo "<a href='subscribers.php?organizer_id=$organizerId' class='organizer-name' data-organizer-id='$organizerId'>$organizerName</a>";
+        echo "</td>";
+        echo "<td>";
+        // Display attendees count without a hyperlink
+        echo "$fetchOrganizersWithAttendees";
+        echo "</td>";
+        echo "<td>$totalEvents</td>";
+        echo "<td>";
+        echo "<button class='edit-organizer btn btn-outline-primary' data-organizer-id='$organizerId'><i class='bi bi-pencil-square'></i></button>";
+        echo "<button class='save-organizer btn btn-outline-success' data-organizer-id='$organizerId' style='display: none;'><i class='bi bi-check2-square'></i></button>";
+        echo "</td>";
+        echo "</tr>";
+    }
+    ?>
+</tbody>
+
                         </table>
                     </div>
                 </div>

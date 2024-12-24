@@ -60,6 +60,10 @@ function getEventList($conn) {
 
 // Function to fetch the number of attendees for a specific event and the number of repeated attendees
 function getEventAttendees($conn, $event_id) {
+    // Initialize return values
+    $totalAttendees = 0;
+    $repeatedAttendees = 0;
+
     // Fetch the total unique attendees (distinct subscriber_id for the event)
     $sqlTotalAttendees = "SELECT COUNT(DISTINCT subscriber_id) AS total FROM event_subscriber_mapping WHERE event_id = ?";
     $stmtTotalAttendees = $conn->prepare($sqlTotalAttendees);
@@ -67,19 +71,22 @@ function getEventAttendees($conn, $event_id) {
     $stmtTotalAttendees->execute();
     $resultTotalAttendees = $stmtTotalAttendees->get_result();
     $rowTotalAttendees = $resultTotalAttendees->fetch_assoc();
-    $totalAttendees = $rowTotalAttendees["total"];
+    $totalAttendees = $rowTotalAttendees ? $rowTotalAttendees["total"] : 0;
 
     // Fetch the repeated attendees (those who have attended more than once to the event)
-    $sqlRepeatedAttendees = "SELECT COUNT(*) AS total FROM (
-        SELECT subscriber_id FROM event_subscriber_mapping WHERE event_id = ? 
-        GROUP BY subscriber_id HAVING COUNT(subscriber_id) > 1
-    ) AS repeated";
+    $sqlRepeatedAttendees = "SELECT subscriber_id, COUNT(*) AS total 
+    FROM event_subscriber_mapping
+    WHERE subscriber_id IN (
+    SELECT DISTINCT subscriber_id
+    FROM event_subscriber_mapping
+    WHERE event_id = ?)
+   GROUP BY subscriber_id HAVING COUNT(*) > 1";
     $stmtRepeatedAttendees = $conn->prepare($sqlRepeatedAttendees);
     $stmtRepeatedAttendees->bind_param("i", $event_id);
     $stmtRepeatedAttendees->execute();
     $resultRepeatedAttendees = $stmtRepeatedAttendees->get_result();
     $rowRepeatedAttendees = $resultRepeatedAttendees->fetch_assoc();
-    $repeatedAttendees = $rowRepeatedAttendees["total"];
+    $repeatedAttendees = $rowRepeatedAttendees ? $rowRepeatedAttendees["total"] : 0;
 
     return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
 }
@@ -99,6 +106,21 @@ function getEventForDate($conn, $today) {
         return null; // No event found for today
     }
 }
+
+// Function to count the total number of events
+function countTotalEvents($conn) {
+    $sql = "SELECT COUNT(*) AS total_events FROM events";
+    $result = $conn->query($sql);
+    if (!$result) {
+        die("Error counting events: " . $conn->error);
+    }
+    $row = $result->fetch_assoc();
+    return $row['total_events'];
+}
+
+// Get the total number of events
+$totalEvents = countTotalEvents($conn);
+
 
 // Handle the form submission for editing events
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit"])) {
@@ -199,7 +221,7 @@ $organizers = fetchOrganizers($conn);
                         ?>
                     </div>
                     <!-- Left Column: List of Events -->
-                    <h2>List of Events:</h2>
+                    <h2>Events: <?php echo $totalEvents; ?></h2>
                     <table class="table table-bordered">
     <thead>
         <tr>
@@ -210,39 +232,40 @@ $organizers = fetchOrganizers($conn);
         </tr>
     </thead>
     <tbody>
-        <?php
-        while ($event = $events->fetch_assoc()) {
-            $eventId = $event["event_id"];
-            $eventName = $event["event_name"];
-            $eventDate = $event["event_date"];
+    <?php
+    while ($event = $events->fetch_assoc()) {
+        $eventId = $event["event_id"];
+        $eventName = $event["event_name"];
+        $eventDate = $event["event_date"];
 
-            // Calculate the total attendees for the current event
-            $attendees = getEventAttendees($conn, $eventId);
-            $totalAttendees = $attendees["total"];
-            $repeatedAttendees = $attendees["repeated"];
+        // Calculate the total attendees for the current event
+        $attendees = getEventAttendees($conn, $eventId);
+        $totalAttendees = $attendees["total"];
+        $repeatedAttendees = $attendees["repeated"];
 
-            
-            echo "<tr>";
-            echo "<td>";
-            echo '<span class="event-name" data-event-id="' . $eventId . '">' . $eventName . '</span>';
-            echo "</td>";
-            echo "<td>";
-            $eventDateFormatted = date("d F Y", strtotime($eventDate));
-            echo "<span class='event-date' data-event-id='$eventId'>$eventDateFormatted</span>";
-            // Add an input field for editing the event date
-            echo "<input class='form-control event-date-input' data-event-id='$eventId' type='text' value='$eventDate' style='display: none;'>";
-            echo "</td>";
-            echo "<td>";
-            echo "<a href='subscribers.php?event_id=$eventId'>$totalAttendees ($repeatedAttendees)</a>";
-            echo "</td>";
-            echo "<td>";
-            echo "<button class='btn btn-outline-warning edit-event' data-event-id='$eventId'><i class='bi bi-pencil-square'></i></button>";
-            echo "<button class='btn btn-outline-success save-event' data-event-id='$eventId' style='display: none;'><i class='bi bi-check2-square'></i></button>";
-            echo "</td>";
-            echo "</tr>";
-        }
-        ?>
-    </tbody>
+        echo "<tr>";
+        echo "<td>";
+        // Make the event name a hyperlink
+        echo '<a href="subscribers.php?event_id=' . $eventId . '" class="event-name" data-event-id="' . $eventId . '">' . $eventName . '</a>';
+        echo "</td>";
+        echo "<td>";
+        $eventDateFormatted = date("d F Y", strtotime($eventDate));
+        echo "<span class='event-date' data-event-id='$eventId'>$eventDateFormatted</span>";
+        // Add an input field for editing the event date
+        echo "<input class='form-control event-date-input' data-event-id='$eventId' type='text' value='$eventDate' style='display: none;'>";
+        echo "</td>";
+        echo "<td>";
+        echo "$totalAttendees ($repeatedAttendees)";
+        echo "</td>";
+        echo "<td>";
+        echo "<button class='btn btn-outline-primary edit-event' data-event-id='$eventId'><i class='bi bi-pencil-square'></i></button>";
+        echo "<button class='btn btn-outline-success save-event' data-event-id='$eventId' style='display: none;'><i class='bi bi-check2-square'></i></button>";
+        echo "</td>";
+        echo "</tr>";
+    }
+    ?>
+</tbody>
+
 </table>
 
                 </div>
