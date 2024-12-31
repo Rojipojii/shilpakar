@@ -172,7 +172,12 @@ $organizers = fetchOrganizersWithAttendees($conn);
                                 </tr>
                             </thead>
                             <tbody>
-    <?php
+                            <?php
+    // Sort organizers alphabetically by organizer_name
+    usort($organizers, function($a, $b) {
+        return strcmp($a["organizer_name"], $b["organizer_name"]);
+    });
+
     foreach ($organizers as $organizer) {
         $organizerId = $organizer["organizer_id"];
         $organizerName = $organizer["organizer_name"];
@@ -195,7 +200,8 @@ $organizers = fetchOrganizersWithAttendees($conn);
         echo "</td>";
         echo "</tr>";
     }
-    ?>
+?>
+
 </tbody>
 
                         </table>

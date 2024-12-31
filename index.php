@@ -31,70 +31,33 @@ function insertData(
 ) {
     // Ensure arrays for inputs
     $mobileNumbers = is_array($mobileNumbers) ? $mobileNumbers : [$mobileNumbers];
-    $emails = is_array($emails) ? array_map('strtolower', $emails) : [strtolower($emails)];
+    $emails = is_array($emails) ? $emails : [$emails];
     $designations = is_array($designations) ? $designations : [$designations];
     $organizations = is_array($organizations) ? $organizations : [$organizations];
+
+    // Sanitize emails: trim spaces and convert to lowercase
+    $emails = array_map(function($email) {
+        return strtolower(trim($email));
+    }, $emails);
 
     // Initialize subscriber ID
     $subscriberId = null;
 
-    // Check for existing phone numbers
-    $phonePlaceholders = implode(',', array_fill(0, count($mobileNumbers), '?'));
-    $sqlCheckPhone = "SELECT subscriber_id FROM phone_numbers WHERE phone_number IN ($phonePlaceholders)";
-    $stmtCheckPhone = $conn->prepare($sqlCheckPhone);
-    if (!$stmtCheckPhone) {
+    // Create new subscriber without checking for existing phone or email
+    $sqlSubscriber = "INSERT INTO subscribers (full_name, address, number_of_events_attended) VALUES (?, ?, ?)";
+    $stmtSubscriber = $conn->prepare($sqlSubscriber);
+    if (!$stmtSubscriber) {
         error_log("Prepare failed: " . $conn->error);
         return false;
     }
-    $stmtCheckPhone->bind_param(str_repeat('s', count($mobileNumbers)), ...$mobileNumbers);
-    $stmtCheckPhone->execute();
-    $result = $stmtCheckPhone->get_result();
-
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $subscriberId = $row['subscriber_id'];
-        error_log("Matching phone number found. Using existing subscriber ID: $subscriberId");
+    $stmtSubscriber->bind_param("ssi", $fullName, $address, $number_of_events_attended);
+    if (!$stmtSubscriber->execute()) {
+        error_log("Execute failed: " . $stmtSubscriber->error);
+        return false;
     }
-    $stmtCheckPhone->close();
-
-    // Check for existing emails
-    if ($subscriberId === null) {
-        $emailPlaceholders = implode(',', array_fill(0, count($emails), '?'));
-        $sqlCheckEmail = "SELECT subscriber_id FROM emails WHERE email IN ($emailPlaceholders)";
-        $stmtCheckEmail = $conn->prepare($sqlCheckEmail);
-        if (!$stmtCheckEmail) {
-            error_log("Prepare failed: " . $conn->error);
-            return false;
-        }
-        $stmtCheckEmail->bind_param(str_repeat('s', count($emails)), ...$emails);
-        $stmtCheckEmail->execute();
-        $result = $stmtCheckEmail->get_result();
-
-        if ($result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            $subscriberId = $row['subscriber_id'];
-            error_log("Matching email found. Using existing subscriber ID: $subscriberId");
-        }
-        $stmtCheckEmail->close();
-    }
-
-    // Create new subscriber if not found
-    if ($subscriberId === null) {
-        $sqlSubscriber = "INSERT INTO subscribers (full_name, address, number_of_events_attended) VALUES (?, ?, ?)";
-        $stmtSubscriber = $conn->prepare($sqlSubscriber);
-        if (!$stmtSubscriber) {
-            error_log("Prepare failed: " . $conn->error);
-            return false;
-        }
-        $stmtSubscriber->bind_param("ssi", $fullName, $address, $number_of_events_attended);
-        if (!$stmtSubscriber->execute()) {
-            error_log("Execute failed: " . $stmtSubscriber->error);
-            return false;
-        }
-        $subscriberId = $stmtSubscriber->insert_id;
-        $stmtSubscriber->close();
-        error_log("New subscriber created with ID: $subscriberId");
-    }
+    $subscriberId = $stmtSubscriber->insert_id;
+    $stmtSubscriber->close();
+    error_log("New subscriber created with ID: $subscriberId");
 
     // Insert phone numbers
     $sqlPhone = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
@@ -112,7 +75,7 @@ function insertData(
     }
     $stmtPhone->close();
 
-    // Insert emails
+    // Insert sanitized emails
     $sqlEmail = "INSERT INTO emails (subscriber_id, email) VALUES (?, ?)";
     $stmtEmail = $conn->prepare($sqlEmail);
     if (!$stmtEmail) {
@@ -129,63 +92,55 @@ function insertData(
     $stmtEmail->close();
 
     // Insert designations and organizations into designation_organization table
-$sqlDesignationOrganization = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
-$stmtDesignationOrganization = $conn->prepare($sqlDesignationOrganization);
-if (!$stmtDesignationOrganization) {
-    error_log("Prepare failed: " . $conn->error);
-    return false;
-}
-
-// Loop through designations and organizations arrays
-for ($i = 0; $i < max(count($designations), count($organizations)); $i++) {
-    $designation = $designations[$i] ?? null; // Use null if no more designations
-    $organization = $organizations[$i] ?? null; // Use null if no more organizations
-
-    $stmtDesignationOrganization->bind_param("iss", $subscriberId, $designation, $organization);
-    if (!$stmtDesignationOrganization->execute()) {
-        error_log("Execute failed: " . $stmtDesignationOrganization->error);
-        return false;
-    }
-}
-$stmtDesignationOrganization->close();
-
-
-    // Insert into event_subscriber_mapping if event details are provided
-if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
-    // If event details are provided, insert as usual
-    $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
-    $stmtMapping = $conn->prepare($sqlMapping);
-    if (!$stmtMapping) {
+    $sqlDesignationOrganization = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
+    $stmtDesignationOrganization = $conn->prepare($sqlDesignationOrganization);
+    if (!$stmtDesignationOrganization) {
         error_log("Prepare failed: " . $conn->error);
         return false;
     }
-    $stmtMapping->bind_param("iiii", $subscriberId, $event_id, $organizer_id, $category_id);
-    if (!$stmtMapping->execute()) {
-        error_log("Execute failed: " . $stmtMapping->error);
-        return false;
+    for ($i = 0; $i < max(count($designations), count($organizations)); $i++) {
+        $designation = $designations[$i] ?? null;
+        $organization = $organizations[$i] ?? null;
+        $stmtDesignationOrganization->bind_param("iss", $subscriberId, $designation, $organization);
+        if (!$stmtDesignationOrganization->execute()) {
+            error_log("Execute failed: " . $stmtDesignationOrganization->error);
+            return false;
+        }
     }
-    $stmtMapping->close();
-} else {
-    // If no event is selected, insert with a default category (e.g., 'general')
-    $defaultCategoryId = '4';  // Define the default category ID
-    $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)";
-    $stmtMapping = $conn->prepare($sqlMapping);
-    if (!$stmtMapping) {
-        error_log("Prepare failed: " . $conn->error);
-        return false;
-    }
-    $stmtMapping->bind_param("is", $subscriberId, $defaultCategoryId);  // Assuming category_id is a string
-    if (!$stmtMapping->execute()) {
-        error_log("Execute failed: " . $stmtMapping->error);
-        return false;
-    }
-    $stmtMapping->close();
-}
+    $stmtDesignationOrganization->close();
 
+    // Insert into event_subscriber_mapping
+    if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
+        $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
+        $stmtMapping = $conn->prepare($sqlMapping);
+        if (!$stmtMapping) {
+            error_log("Prepare failed: " . $conn->error);
+            return false;
+        }
+        $stmtMapping->bind_param("iiii", $subscriberId, $event_id, $organizer_id, $category_id);
+        if (!$stmtMapping->execute()) {
+            error_log("Execute failed: " . $stmtMapping->error);
+            return false;
+        }
+        $stmtMapping->close();
+    } else {
+        $defaultCategoryId = 6; // Default category ID
+        $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)";
+        $stmtMapping = $conn->prepare($sqlMapping);
+        if (!$stmtMapping) {
+            error_log("Prepare failed: " . $conn->error);
+            return false;
+        }
+        $stmtMapping->bind_param("ii", $subscriberId, $defaultCategoryId);
+        if (!$stmtMapping->execute()) {
+            error_log("Execute failed: " . $stmtMapping->error);
+            return false;
+        }
+        $stmtMapping->close();
+    }
 
     return true;
 }
-
 
 
 

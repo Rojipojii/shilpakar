@@ -180,7 +180,12 @@ $categories = fetchCategoriesWithAttendees($conn);
                 </tr>
             </thead>
             <tbody>
-    <?php
+            <?php
+    // Sort categories alphabetically by category_name
+    usort($categories, function($a, $b) {
+        return strcmp($a["category_name"], $b["category_name"]);
+    });
+
     foreach ($categories as $category) {
         $categoryId = $category["category_id"];
         $categoryName = $category["category_name"];
@@ -203,7 +208,8 @@ $categories = fetchCategoriesWithAttendees($conn);
         echo "</td>";
         echo "</tr>";
     }
-    ?>
+?>
+
 </tbody>
 
         </table>

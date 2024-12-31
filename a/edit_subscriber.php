@@ -69,22 +69,29 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $subscriberPhones = array_unique($subscriberPhones);
         $subscriberPhone = implode(', ', $subscriberPhones);
 
-        // Fetch all emails associated with the subscriber
-        $emailQuery = $conn->prepare("SELECT email FROM emails WHERE subscriber_id = ?");
-        if ($emailQuery === false) {
-            die('MySQL prepare error for email query: ' . $conn->error);
-        }
-        $emailQuery->bind_param("i", $subscriberID);
-        $emailQuery->execute();
-        $emailResult = $emailQuery->get_result();
-        $subscriberEmails = [];
-        while ($email = $emailResult->fetch_assoc()) {
-            $subscriberEmails[] = $email['email'];
-        }
-        $subscriberEmails = array_unique($subscriberEmails);
-        $subscriberEmail = implode(', ', $subscriberEmails);
+       // Fetch all emails associated with the subscriber
+$emailQuery = $conn->prepare("SELECT email FROM emails WHERE subscriber_id = ?");
+if ($emailQuery === false) {
+    die('MySQL prepare error for email query: ' . $conn->error);
+}
+$emailQuery->bind_param("i", $subscriberID);
+$emailQuery->execute();
+$emailResult = $emailQuery->get_result();
+$subscriberEmails = [];
 
-       // Fetch all designations and organizations associated with the subscriber
+while ($email = $emailResult->fetch_assoc()) {
+    // Normalize the email to lowercase to ensure uniqueness
+    $subscriberEmails[] = strtolower($email['email']);
+}
+
+// Use array_unique to remove duplicates
+$subscriberEmails = array_unique($subscriberEmails);
+
+// Convert the array back to a comma-separated string for display
+$subscriberEmail = implode(', ', $subscriberEmails);
+
+
+      // Fetch all designations and organizations associated with the subscriber
 $doQuery = $conn->prepare("SELECT designation, organization FROM designation_organization WHERE subscriber_id = ?");
 if ($doQuery === false) {
     die('MySQL prepare error for designation_organization query: ' . $conn->error);
@@ -93,56 +100,61 @@ $doQuery->bind_param("i", $subscriberID);
 $doQuery->execute();
 $doResult = $doQuery->get_result();
 
-$subscriberDesignations = [];
-$subscriberOrganizations = [];
+// Use an associative array to ensure unique designation-organization pairs
+$uniquePairs = [];
 
+// Normalize and add each pair
 while ($row = $doResult->fetch_assoc()) {
-    // Add designation to the array (even if it's empty)
-    $subscriberDesignations[] = $row['designation'] ?: '';  // If designation is empty, add an empty string
-    
-    // Add organization to the array (even if it's empty)
-    $subscriberOrganizations[] = $row['organization'] ?: '';  // If organization is empty, add an empty string
+    $designation = strtolower(trim($row['designation'] ?: '')); // Normalize designation (lowercase, trim whitespace)
+    $organization = strtolower(trim($row['organization'] ?: '')); // Normalize organization (lowercase, trim whitespace)
+
+    // Use a concatenated string as the key to ensure uniqueness
+    $key = $designation . '|' . $organization;
+
+    if (!isset($uniquePairs[$key])) {
+        $uniquePairs[$key] = [
+            'designation' => $row['designation'], // Keep original case for display
+            'organization' => $row['organization'], // Keep original case for display
+        ];
+    }
 }
 
-// Ensure both arrays have the same count by adding empty rows if necessary
-$maxCount = max(count($subscriberDesignations), count($subscriberOrganizations));
-
-while (count($subscriberDesignations) < $maxCount) {
-    $subscriberDesignations[] = '';  // Add empty designation if missing
-}
-while (count($subscriberOrganizations) < $maxCount) {
-    $subscriberOrganizations[] = '';  // Add empty organization if missing
-}
-
-// Now $subscriberDesignations and $subscriberOrganizations should have the same count
 $doQuery->close();
+
+// Extract unique designations and organizations for display
+$subscriberDesignations = array_column($uniquePairs, 'designation');
+$subscriberOrganizations = array_column($uniquePairs, 'organization');
+
 
 
 
         // Fetch unique events attended by subscribers with the same phone number or email
-        $eventsQuery = $conn->prepare("SELECT DISTINCT e.event_id, e.event_name
-            FROM event_subscriber_mapping esm
-            INNER JOIN events e ON esm.event_id = e.event_id
-            WHERE esm.subscriber_id IN (
-                SELECT s.subscriber_id
-                FROM subscribers s
-                LEFT JOIN phone_numbers pn ON s.subscriber_id = pn.subscriber_id
-                LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
-                WHERE pn.phone_number = ? OR e.email = ?
-            )");
+        $eventsQuery = $conn->prepare("SELECT DISTINCT e.event_id, e.event_name, e.event_date
+        FROM event_subscriber_mapping esm
+        INNER JOIN events e ON esm.event_id = e.event_id
+        WHERE esm.subscriber_id IN (
+        SELECT s.subscriber_id
+        FROM subscribers s
+        LEFT JOIN phone_numbers pn ON s.subscriber_id = pn.subscriber_id
+        LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
+        WHERE pn.phone_number = ? OR e.email = ?
+        )
+        ORDER BY e.event_date DESC"); // Latest event first
         if ($eventsQuery === false) {
-            die('MySQL prepare error for events query: ' . $conn->error);
+        die('MySQL prepare error for events query: ' . $conn->error);
         }
         $eventsQuery->bind_param("ss", $subscriberPhone, $subscriberEmail);
         $eventsQuery->execute();
-        $eventsResult = $eventsQuery->get_result();
-        $eventsAttended = [];
+$eventsResult = $eventsQuery->get_result();
+$eventsAttended = [];
 
-        while ($event = $eventsResult->fetch_assoc()) {
-            $eventUrl = "subscribers.php?event_id=" . $event['event_id'];
-            $eventsAttended[] = '<a href="' . $eventUrl . '" class="users-list-name" style="display: inline;">' . htmlspecialchars($event['event_name']) . '</a>';
-        }
-        $subscriber['events_attended'] = implode(', ', $eventsAttended);
+while ($event = $eventsResult->fetch_assoc()) {
+    $eventUrl = "list?event_id=" . $event['event_id'];
+    $eventsAttended[] = '<a href="' . $eventUrl . '" class="users-list-name" style="display: inline; text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . htmlspecialchars($event['event_name']) . '</a>';
+}
+
+$subscriber['events_attended'] = implode(', ', $eventsAttended);
+
 
        // Fetch the unique categories attended by the subscriber, including newly inserted ones 
 $categoriesQuery = $conn->prepare("
@@ -163,6 +175,43 @@ while ($category = $categoriesResult->fetch_assoc()) {
     $categoriesAttended[] = $category['category_id'];  // Store category_id instead of category_name
 }
 $subscriber['categories_attended'] = implode(',', $categoriesAttended);  // Store as comma-separated IDs for ease of use
+
+// Fetch the unique organizers affiliated with the subscriber
+$organizersQuery = $conn->prepare("
+    SELECT DISTINCT o.organizer_id, o.organizer_name
+    FROM event_subscriber_mapping esm
+    INNER JOIN organizers o ON esm.organizer_id = o.organizer_id
+    WHERE esm.subscriber_id = ?
+");
+
+if ($organizersQuery === false) {
+    // Log the error and terminate the script
+    die('MySQL prepare error for organizers query: ' . $conn->error);
+}
+
+// Bind subscriber ID for accurate results
+$organizersQuery->bind_param("i", $subscriberID);
+
+// Execute the query
+if (!$organizersQuery->execute()) {
+    // Log the error and terminate the script
+    die('MySQL execution error for organizers query: ' . $organizersQuery->error);
+}
+
+// Retrieve the query results
+$organizersResult = $organizersQuery->get_result();
+$organizersAffiliated = [];
+
+// Process the results
+while ($organizer = $organizersResult->fetch_assoc()) {
+    // Store organizer_id in the array
+    $organizersAffiliated[] = $organizer['organizer_id'];
+}
+
+// Convert the array of organizer IDs to a comma-separated string
+$subscriber['organizers_affiliated'] = implode(',', $organizersAffiliated);
+
+
 
     } else {
         header("Location: subscribers.php");
@@ -294,15 +343,17 @@ function upsertDesignationOrganization($conn, $table, $designations, $organizati
     // Ensure both arrays have the same number of elements
     $count = max(count($designations), count($organizations));
     
-    // Fetch existing IDs for this subscriber
-    $query = $conn->prepare("SELECT des_org_id FROM $table WHERE subscriber_id = ?");
+    // Fetch existing IDs and records for this subscriber
+    $query = $conn->prepare("SELECT des_org_id, designation, organization FROM $table WHERE subscriber_id = ?");
     $query->bind_param("i", $subscriberID);
     $query->execute();
     $result = $query->get_result();
     
     $existingIDs = [];
+    $existingRecords = [];
     while ($row = $result->fetch_assoc()) {
         $existingIDs[] = $row['des_org_id'];
+        $existingRecords[] = ['designation' => $row['designation'], 'organization' => $row['organization']];
     }
 
     for ($i = 0; $i < $count; $i++) {
@@ -313,29 +364,36 @@ function upsertDesignationOrganization($conn, $table, $designations, $organizati
             continue; // Skip empty rows
         }
 
-        // Check if record exists
-        $checkStmt = $conn->prepare(
-            "SELECT des_org_id FROM $table WHERE subscriber_id = ? AND designation = ? AND organization = ?"
-        );
-        $checkStmt->bind_param("iss", $subscriberID, $designation, $organization);
-        $checkStmt->execute();
-        $checkResult = $checkStmt->get_result();
+        // Check if the record already exists (case-insensitive check)
+        $found = false;
+        foreach ($existingRecords as $index => $existingRecord) {
+            // Compare both designation and organization case-sensitively (allow for case changes)
+            if ($existingRecord['designation'] === $designation && $existingRecord['organization'] === $organization) {
+                // Record exists, no need to insert, mark as found
+                $existingIDs = array_diff($existingIDs, [$existingIDs[$index]]);
+                $found = true;
+                break;
+            }
+        }
 
-        if ($checkResult->num_rows > 0) {
-            // Record exists, remove it from the deletion list
-            $row = $checkResult->fetch_assoc();
-            $existingIDs = array_diff($existingIDs, [$row['des_org_id']]);
-        } else {
-            // Insert new record
+        if (!$found) {
+            // Insert new record if no match is found
             $insertStmt = $conn->prepare(
                 "INSERT INTO $table (subscriber_id, designation, organization) VALUES (?, ?, ?)"
             );
             $insertStmt->bind_param("iss", $subscriberID, $designation, $organization);
             $insertStmt->execute();
+        } else {
+            // If the record exists, perform an update (even if only the case changed)
+            $updateStmt = $conn->prepare(
+                "UPDATE $table SET designation = ?, organization = ? WHERE subscriber_id = ? AND des_org_id = ?"
+            );
+            $updateStmt->bind_param("ssii", $designation, $organization, $subscriberID, $existingIDs[$index]);
+            $updateStmt->execute();
         }
     }
 
-    // Delete old records
+    // Delete old records if any
     foreach ($existingIDs as $idToDelete) {
         $deleteStmt = $conn->prepare("DELETE FROM $table WHERE des_org_id = ?");
         $deleteStmt->bind_param("i", $idToDelete);
@@ -430,6 +488,8 @@ $maxCount = max(count($subscriberDesignations), count($subscriberOrganizations))
 
     <style>
 
+
+
 div {
     white-space: normal; /* Default value, allows wrapping inline */
 }
@@ -520,6 +580,22 @@ input {
         color: red;
         font-size: 14px;
     }
+/* Ensure no space between label and input */
+h5.mb-0,
+.form-label.mb-0 {
+    margin-bottom: 0 !important; /* Forcefully remove any margin */
+}
+
+.form-control {
+    margin-top: 0 !important; /* Remove margin from the top of the input field */
+    padding-top: 0 !important; /* Remove padding from the top */
+}
+
+.form-group {
+    margin-bottom: 0 !important; /* Remove bottom margin between form groups */
+}
+
+
 </style>
 </head>
 
@@ -547,42 +623,64 @@ input {
     <div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage); ?></div>
 <?php endif; ?>
 
-        <div class="col-md-6 mb-2">
-        <h5>Full Name</h5>
-            <label for="full_name" class="form-label"></label>
-            <input type="text" name="full_name" id="full_name" class="form-control" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required><br>
+
+<div class="row">
+<div class="col-md-6 mb-2">
+    <label for="full_name" class="form-label mb-0" style="font-size: 1.25rem; font-weight: 500;">Full Name</label><br>
+    <input type="text" name="full_name" id="full_name" class="form-control mt-0" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
+</div>
         </div>
 
 
-        <div class="row">
-    <div class="col-md-6">
-        <h5>Phone Number</h5><br>
-        <?php if (!empty($subscriberPhones)): ?>
-            <?php foreach ($subscriberPhones as $index => $phone): ?>
-                <div class="mb-2 d-flex align-items-center" id="phone-row-<?php echo $index; ?>">
-                    <label for="phone_number" class="form-label"></label>
-                    <input type="text" name="phone_number[]" id="phone_number" class="form-control" value="<?php echo htmlspecialchars($phone); ?>" required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" >
-                    <button type="button" class="btn btn-link ms-2 add-phone">+</button>
-                    <button type="button" class="btn btn-link ms-2 remove-phone">-</button>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="mb-2 d-flex align-items-center">
-                <label for="phone_number" class="form-label"></label>
-                <input type="text" name="phone_number[]" id="phone_number" class="form-control" placeholder="Enter phone number" pattern="^\d{10}$">
+<div class="col-md-12 mt-4" id="phonenumber_email">
+<div class="row">
+<div class="col-md-6"> 
+    <!-- Label instead of h5 for consistent styling -->
+    <label for="phone_number" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Phone Number</label>
+    <?php if (!empty($subscriberPhones)): ?>
+        <?php foreach ($subscriberPhones as $index => $phone): ?>
+            <div class="mb-2 d-flex align-items-center" id="phone-row-<?php echo $index; ?>">
+                <label for="phone_number" class="form-label mb-0"></label>
+                <input 
+                    type="text" 
+                    name="phone_number[]" 
+                    id="phone_number" 
+                    class="form-control mt-0" 
+                    value="<?php echo htmlspecialchars($phone); ?>" 
+                    pattern="^\d{10}$" 
+                    title="Phone number must be exactly 10 digits" 
+                    required>
                 <button type="button" class="btn btn-link ms-2 add-phone">+</button>
                 <button type="button" class="btn btn-link ms-2 remove-phone">-</button>
             </div>
-        <?php endif; ?>
-    </div>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <div class="mb-2 d-flex align-items-center">
+            <label for="phone_number" class="form-label mb-0"></label>
+            <input 
+                type="text" 
+                name="phone_number[]" 
+                id="phone_number" 
+                class="form-control mt-0" 
+                placeholder="Enter phone number" 
+                pattern="^\d{10}$" 
+                title="Phone number must be exactly 10 digits" 
+                required>
+            <button type="button" class="btn btn-link ms-2 add-phone">+</button>
+            <button type="button" class="btn btn-link ms-2 remove-phone">-</button>
+        </div>
+    <?php endif; ?>
+</div>
+
+
     
     <div class="col-md-6">
-        <h5>Email</h5><br>
+    <label for="email" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Email</label>
         <?php if (!empty($subscriberEmails)): ?>
             <?php foreach ($subscriberEmails as $index => $email): ?>
                 <div class="mb-2 d-flex align-items-center" id="email-row-<?php echo $index; ?>">
                     <label for="email" class="form-label"></label>
-                    <input type="text" name="email[]" id="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" required>
+                    <input type="text" name="email[]" id="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" >
                     <button type="button" class="btn btn-link ms-2 add-email">+</button>
                     <button type="button" class="btn btn-link ms-2 remove-email">-</button>
                 </div>
@@ -597,10 +695,10 @@ input {
         <?php endif; ?>
     </div>
 </div>
+        </div>
 
-<br>
 
-<script>
+        <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Function to handle the addition of a new input field
         function addField(event, fieldName) {
@@ -608,7 +706,8 @@ input {
             const newField = container.querySelector('.mb-2').cloneNode(true);
 
             // Reset the value of the new field and ensure it is empty
-            newField.querySelector('input').value = '';
+            const input = newField.querySelector('input');
+            input.value = '';
 
             // Append the new field to the container
             container.appendChild(newField);
@@ -620,6 +719,16 @@ input {
             // Only remove the field if there are more than one
             if (container.parentNode.children.length > 1) {
                 container.remove();
+            }
+        }
+
+        // Restrict phone number input to 10 digits
+        function restrictTo10Digits(event) {
+            const input = event.target;
+
+            if (input.name === 'phone_number[]') {
+                // Allow only numbers and limit to 10 digits
+                input.value = input.value.replace(/\D/g, '').slice(0, 10);
             }
         }
 
@@ -640,16 +749,17 @@ input {
                 removeField(event);
             }
         });
+
+        // Attach the input event listener to restrict to 10 digits
+        document.body.addEventListener('input', restrictTo10Digits);
     });
 </script>
-
-<br>
 
 <div class="col-md-12 mt-4" id="designation-organization-wrapper">
     <div class="row">
         <!-- Designations Column -->
         <div class="col-md-6" id="designations-container">
-            <h5>Designations</h5><br>
+        <label class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Designation</label>
             <?php for ($index = 0; $index < $maxCount; $index++): ?>
                 <?php
                     $designation = isset($subscriberDesignations[$index]) ? htmlspecialchars($subscriberDesignations[$index]) : '';
@@ -669,7 +779,7 @@ input {
 
         <!-- Organizations Column -->
         <div class="col-md-6" id="organizations-container">
-            <h5>Organizations</h5><br>
+        <label class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Organization</label>
             <?php for ($index = 0; $index < $maxCount; $index++): ?>
                 <?php
                     $organization = isset($subscriberOrganizations[$index]) ? htmlspecialchars($subscriberOrganizations[$index]) : '';
@@ -694,47 +804,48 @@ input {
     </div>
 </div>
 <script>
-    $(document).ready(function () {
-        // Add new row
-        $(document).on("click", ".add-row", function () {
-            // Get the next index
-            const newIndex = $(".designation-row").length;
+   $(document).ready(function () {
+    // Add new row
+    $(document).on("click", ".add-row", function () {
+        // Get the next index
+        const newIndex = $(".designation-row").length;
 
-            // Append new rows to both columns
-            $("#designations-container").append(`
-                <div class="designation-row mb-2" id="designation-row-${newIndex}">
-                    <input type="text" name="designation[${newIndex}]" class="form-control" placeholder="Enter designation">
-                </div>
-            `);
+        // Append new rows to both columns
+        $("#designations-container").append(`
+            <div class="designation-row mb-2" id="designation-row-${newIndex}">
+                <input type="text" name="designation[${newIndex}]" class="form-control" placeholder="Enter designation">
+            </div>
+        `);
 
-            $("#organizations-container").append(`
-                <div class="organization-row mb-2 d-flex align-items-center" id="organization-row-${newIndex}">
-                    <input type="text" name="organization[${newIndex}]" class="form-control me-2" placeholder="Enter organization">
-                    <button type="button" class="btn btn-link add-row">+</button>
-                    <button type="button" class="btn btn-link remove-row">-</button>
-                </div>
-            `);
-        });
-
-        // Remove the last row (both designation and organization)
-        $(document).on("click", ".remove-row", function () {
-            // Get the number of rows
-            const totalRows = $(".designation-row").length;
-
-            if (totalRows > 1) { // Ensure at least one row remains
-                $(".designation-row:last").remove();
-                $(".organization-row:last").remove();
-            }
-        });
+        $("#organizations-container").append(`
+            <div class="organization-row mb-2 d-flex align-items-center" id="organization-row-${newIndex}">
+                <input type="text" name="organization[${newIndex}]" class="form-control me-2" placeholder="Enter organization">
+                <button type="button" class="btn btn-link add-row">+</button>
+                <button type="button" class="btn btn-link remove-row">-</button>
+            </div>
+        `);
     });
+
+    // Remove the specific row (both designation and organization)
+    $(document).on("click", ".remove-row", function () {
+        // Find the parent row of the clicked button
+        const parentRow = $(this).closest('.organization-row');
+
+        // Remove the clicked row and its corresponding designation row
+        const rowIndex = parentRow.attr('id').split('-')[2]; // Get the row index
+        $(`#designation-row-${rowIndex}`).remove();  // Remove the corresponding designation row
+        parentRow.remove(); // Remove the organization row
+    });
+});
+
 </script>
 
+
+<div class="col-md-12 mt-4" id="category-organization-wrapper">
 <div class="row">
     <!-- MultiSelect for Categories -->
     <div class="col-md-6 mb-3">
-        <br>
-        <h5>Categories</h5>
-        <label for="categories" class="form-label"></label>
+        <label for="categories" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Categories</label>
         <select name="categories[]" id="categories" class="form-control select2" multiple="multiple">
         <?php 
 // Ensure $categoriesAttended is an array, even if categories_attended is NULL
@@ -757,20 +868,57 @@ foreach ($allCategories as $category) {
 
         </select>
     </div>
-</div>
+
+<?php if (!empty($subscriber['organizers_affiliated'])): ?>
+    <div class="col-md-6">
+
+        <label class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Affiliated Organizers</label><br>
+            <?php 
+            // Fetch organizer names using IDs
+            $organizerIDs = explode(',', $subscriber['organizers_affiliated']); // Assuming IDs are comma-separated
+            $totalOrganizers = count($organizerIDs);
+            $j = 1;
+
+            foreach ($organizerIDs as $organizerID) {
+                // Prepare the query to get organizer name
+                $organizerQuery = $conn->prepare("SELECT organizer_name FROM organizers WHERE organizer_id = ?");
+                if ($organizerQuery === false) {
+                    die('MySQL prepare error: ' . $conn->error);
+                }
+                $organizerID = trim($organizerID); // Ensure no extra whitespace
+                $organizerQuery->bind_param("i", $organizerID); // Bind the organizer ID
+                $organizerQuery->execute();
+                $result = $organizerQuery->get_result();
+                $organizerName = $result->fetch_assoc()['organizer_name'] ?? 'Unknown Organizer';
+
+                echo '<a href="list?organizer=' . urlencode($organizerID) . '" style="text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . htmlspecialchars($organizerName) . '</a>';
+
+                // Add comma only if this is not the last organizer
+                if ($j < $totalOrganizers) {
+                    echo ', ';
+                }
+                $j++; // Increment counter
+            }
+            ?>
+        </div>
+        </div>
+        </div>
+<?php endif; ?>
+
+
 
 <?php if (!empty($subscriber['events_attended'])): ?>
     <div class="row">
         <div class="col-md-12">
-            <h5>Events Attended</h5><br>
-            <label class="form-label"></label>
+        <label class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Events Attended</label><br>
             <?php 
             // Output the events as HTML links
             $events = explode(',', $subscriber['events_attended']); // assuming events are comma-separated
             $totalEvents = count($events); // Get the total number of events
             $i = 1; // Initialize counter
             foreach ($events as $event) {
-                echo '<a href="#" class="event-link" style="text-decoration: none;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'none\'">' . trim($event) . '</a>';
+                echo '<a href="#" class="event-link" style="text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . trim($event) . '</a>';
+
                 // Add comma only if this is not the last event
                 if ($i < $totalEvents) {
                     echo ', ';

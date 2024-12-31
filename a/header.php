@@ -32,11 +32,11 @@
   <!-- Navbar -->
   <nav class="main-header navbar navbar-expand navbar-white navbar-light">
     <!-- Left navbar links -->
-    <ul class="navbar-nav">
+    <!-- <ul class="navbar-nav">
       <li class="nav-item">
         <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="bi bi-list"></i></a>
       </li>
-    </ul>
+    </ul> -->
   
     <!-- Right navbar links -->
     <ul class="navbar-nav ml-auto">
@@ -85,7 +85,7 @@
                with font-awesome or any other icon font library -->
                <ul class="nav">
                 <li class="nav-item">
-                    <a href="dashboard.php" class="nav-link">
+                    <a href="dashboard" class="nav-link">
                     <i class="bi bi-house-fill"></i>
                         <p>Dashboard</p>
                     </a>
@@ -97,53 +97,47 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="addtolist.php" class="nav-link">
+                    <a href="subscribers" class="nav-link">
                         <i class="bi bi-person-plus-fill"></i>
                         <p>Add Subscribers</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="addevent.php" class="nav-link">
+                    <a href="events" class="nav-link">
                         <i class="bi bi-calendar-event"></i>
                         <p>Events</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="addorganizer.php" class="nav-link">
+                    <a href="organizers" class="nav-link">
                         <i class="bi bi-person"></i>
                         <p>Organizers</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="addcategory.php" class="nav-link">
+                    <a href="categories" class="nav-link">
                         <i class="bi bi-tags"></i>
                         <p>Categories</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="listnumbers.php" class="nav-link">
+                    <a href="phone" class="nav-link">
                         <i class="bi bi-telephone"></i>
                         <p>Phone Number's List</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="createmailinglist.php" class="nav-link">
+                    <a href="mailinglist" class="nav-link">
                         <i class="bi bi-file-earmark-check"></i>
                         <p>Create Mailing-List</p>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="merge.php" class="nav-link">
+                    <a href="merge" class="nav-link">
                         <i class="bi bi-intersect"></i>
                         <p>Merge</p>
                     </a>
                 </li>
-                <!-- <li class="nav-item">
-                    <a href="download.php" class="nav-link">
-                        <i class="bi bi-cloud-download"></i>
-                        <p>Download</p>
-                    </a>
-                </li> -->
             </ul>
             
       </nav>

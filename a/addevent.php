@@ -53,7 +53,11 @@ function fetchOrganizers($conn)
 // Function to fetch a list of events, their IDs, dates, and attendance in descending order of event date
 $events = getEventList($conn);
 function getEventList($conn) {
-    $sql = "SELECT event_id, event_name, event_date FROM events ORDER BY event_date DESC";
+    $sql = "SELECT e.event_id, e.event_name, e.event_date, c.category_name, o.organizer_name 
+        FROM events e
+        JOIN categories c ON e.category_id = c.category_id
+        JOIN organizers o ON e.organizer_id = o.organizer_id
+        ORDER BY e.event_date DESC";
     $result = $conn->query($sql);
     return $result;
 }
@@ -159,28 +163,35 @@ else if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["eventName"]) && i
     $category = $_POST["category"];
     $organizer = $_POST["organizer"];
 
-    // Insert event data into the database
-    $sql = "INSERT INTO events (event_name, event_date, category_id, organizer_id) VALUES (?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        die("Prepare failed: " . $conn->error);
-    }
-
-    // Bind parameters
-    $stmt->bind_param("ssii", $eventName, $eventDate, $category, $organizer);
-    if ($stmt->execute()) {
-        // Event added successfully
-        $eventMessage = "Event added successfully!";
-        echo "<script>
-                  window.location.href = window.location.href; // Reload the page
-              </script>";
+    // Validate the inputs
+    if (empty($eventName) || empty($eventDate) || empty($category) || empty($organizer)) {
+        $eventMessage = "All fields are required, including the event date!";
+        // echo "<script>alert('$eventMessage');</script>";
     } else {
-        $eventMessage = "Error: " . $stmt->error;
-        echo "<script>alert('$eventMessage');</script>";
-    }
+        // Insert event data into the database
+        $sql = "INSERT INTO events (event_name, event_date, category_id, organizer_id) VALUES (?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            die("Prepare failed: " . $conn->error);
+        }
 
-    // Close the database connection
-    $stmt->close();
+        // Bind parameters
+        $stmt->bind_param("ssii", $eventName, $eventDate, $category, $organizer);
+        if ($stmt->execute()) {
+            // Event added successfully
+            $eventMessage = "Event added successfully!";
+            echo "<script>
+                      alert('$eventMessage');
+                      window.location.href = window.location.href; // Reload the page
+                  </script>";
+        } else {
+            $eventMessage = "Error: " . $stmt->error;
+            echo "<script>alert('$eventMessage');</script>";
+        }
+
+        // Close the database connection
+        $stmt->close();
+    }
 }
 
 // Fetch categories from the database
@@ -211,7 +222,7 @@ $organizers = fetchOrganizers($conn);
     <div class="content-header">
         <div class="container-fluid" id="eventListContainer">
             <div class="row mb-2">
-                <div class="col-sm-6">
+                <div class="col-md-8">
                     <!-- Display the category message -->
                     <div id="eventResponseMessage">
                         <?php
@@ -227,6 +238,8 @@ $organizers = fetchOrganizers($conn);
         <tr>
             <th>Event Name</th>
             <th>Event Date</th>
+            <th>Category</th>
+            <th>Organizer</th>
             <th>Event Attendees</th>
             <th>Action</th>
         </tr>
@@ -237,6 +250,8 @@ $organizers = fetchOrganizers($conn);
         $eventId = $event["event_id"];
         $eventName = $event["event_name"];
         $eventDate = $event["event_date"];
+        $categoryName = $event["category_name"];
+        $organizerName = $event["organizer_name"];
 
         // Calculate the total attendees for the current event
         $attendees = getEventAttendees($conn, $eventId);
@@ -254,6 +269,8 @@ $organizers = fetchOrganizers($conn);
         // Add an input field for editing the event date
         echo "<input class='form-control event-date-input' data-event-id='$eventId' type='text' value='$eventDate' style='display: none;'>";
         echo "</td>";
+        echo "<td>$categoryName</td>"; // Display category
+        echo "<td>$organizerName</td>"; // Display organizerzwi
         echo "<td>";
         echo "$totalAttendees ($repeatedAttendees)";
         echo "</td>";
@@ -278,43 +295,69 @@ $organizers = fetchOrganizers($conn);
                             <input type="text" id="eventName" name="eventName" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="eventDate">Event Date:</label>
-                            <input type="text" id="eventDate" name="eventDate" class="form-control" placeholder="YYYY-MM-DD" required>
-                        </div>
-                        <script>
-                 // Initialize Flatpickr datepicker
-    flatpickr('#eventDate', {
-        dateFormat: 'Y-m-d', // Set the date format
-        enableTime: false, // Disable time selection
-        altInput: true, // Show the date in a readable format (optional)
-        altFormat: 'F j, Y', // Date display format (optional)
-        minDate: '', // Set minimum selectable date to today
-        // Add any additional configuration options here
-    });
-</script>
+        <label for="eventDate">Event Date:</label>
+        <input type="text" id="eventDate" name="eventDate" class="form-control" placeholder="YYYY-MM-DD" required>
+    </div>
+    <script>
+        // Initialize Flatpickr datepicker
+        flatpickr('#eventDate', {
+            dateFormat: 'Y-m-d', // Set the date format
+            enableTime: false, // Disable time selection
+            altInput: true, // Show the date in a readable format (optional)
+            altFormat: 'F j, Y', // Date display format (optional)
+            minDate: 'today', // Set minimum selectable date to today
+        });
 
-                        <div class="form-group">
-                            <label for="category">Category:</label>
-                            <select id="category" name="category" class="form-control" required>
-                                <option value="" disabled selected>Select Category</option>
-                                <?php
-                                foreach ($categories as $categoryId => $categoryName) {
-                                    echo "<option value='$categoryId'>$categoryName</option>";
-                                }
-                                ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="organizer">Organizer:</label>
-                            <select id="organizer" name="organizer" class="form-control" required>
-                                <option value="" disabled selected>Select Organizer</option>
-                                <?php
-                                foreach ($organizers as $organizerId => $organizerName) {
-                                    echo "<option value='$organizerId'>$organizerName</option>";
-                                }
-                                ?>
-                            </select>
-                        </div>
+        // Validate form before submission
+        function validateForm() {
+            const eventDateField = document.getElementById('eventDate');
+            const eventDateValue = eventDateField.value;
+
+            // Check if the date is empty
+            if (!eventDateValue) {
+                eventDateField.value = ''; // Clear any existing value
+                eventDateField.placeholder = "Please select a date!"; // Update placeholder with error message
+                eventDateField.classList.add('is-invalid'); // Add Bootstrap invalid class for styling
+                return false; // Prevent form submission
+            }
+
+            eventDateField.classList.remove('is-invalid'); // Remove invalid class if valid
+            return true; // Allow form submission
+        }
+    </script>
+
+<div class="form-group">
+    <label for="category">Category:</label>
+    <select id="category" name="category" class="form-control" required>
+        <option value="" disabled selected>Select Category</option>
+        <?php
+        // Sort the categories array by their values (category names) in alphabetical order
+        asort($categories);
+
+        // Loop through the sorted categories and display each as an option
+        foreach ($categories as $categoryId => $categoryName) {
+            echo "<option value='$categoryId'>$categoryName</option>";
+        }
+        ?>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="organizer">Organizer:</label>
+    <select id="organizer" name="organizer" class="form-control" required>
+        <option value="" disabled selected>Select Organizer</option>
+        <?php
+        // Sort the organizers array by their values (organizer names) in alphabetical order
+        asort($organizers);
+
+        // Loop through the sorted organizers and display each as an option
+        foreach ($organizers as $organizerId => $organizerName) {
+            echo "<option value='$organizerId'>$organizerName</option>";
+        }
+        ?>
+    </select>
+</div>
+
                         <div class="form-group">
                             <input type="submit" value="Add Event" id="addEventButton" class="btn btn-outline-success">
                         </div>

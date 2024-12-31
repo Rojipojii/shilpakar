@@ -49,128 +49,31 @@ function fetchOrganizers($conn) {
     return $organizers;
 }
 
-// Function to fetch events from the database and store category_id and organizer_id
+// Function to fetch events from the database and store category_id, organizer_id, and event_date
 function fetchEvents($conn) {
-    $sql = "SELECT event_id, event_name, category_id, organizer_id FROM events"; 
+    // Update the SQL query to also fetch event_date
+    $sql = "SELECT event_id, event_name, category_id, organizer_id, event_date FROM events"; 
     $result = $conn->query($sql);
+
     if (!$result) {
         die("Error fetching events: " . $conn->error);
     }
+
     $events = array();
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
-            $events[$row["event_id"]] = array(
+            $events[] = array(
+                "event_id" => $row["event_id"],
                 "event_name" => $row["event_name"],
                 "category_id" => $row["category_id"],
-                "organizer_id" => $row["organizer_id"]
-            );
+                "organizer_id" => $row["organizer_id"],
+                "event_date" => $row["event_date"]
+            );            
         }
     }
     return $events;
 }
 
-function insertBulkAddData($conn, $fullName, $mobileNumbers, $emails, $designationsOrganizations, $address, $event_id, $category_id, $organizer_id) {
-    // Insert data into the subscribers table
-    $sql = "INSERT INTO subscribers (full_name, address) VALUES (?, ?)";
-    $stmt = $conn->prepare($sql);
-
-    if (!$stmt) {
-        die("Prepare failed: " . $conn->error);
-    }
-
-    $stmt->bind_param("ss", $fullName, $address);
-
-    if ($stmt->execute()) {
-        // Get the ID of the inserted subscriber
-        $subscriberId = $stmt->insert_id;
-
-        // Ensure $mobileNumbers is an array even if a single string is passed
-        if (is_string($mobileNumbers)) {
-            $mobileNumbers = explode(",", $mobileNumbers);
-        } elseif (!is_array($mobileNumbers)) {
-            die("Mobile numbers is not an array: " . var_export($mobileNumbers, true));
-        }
-
-        // Insert mobile numbers into phone_numbers table
-        $phoneSQL = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
-        $phoneStmt = $conn->prepare($phoneSQL);
-        if (!$phoneStmt) {
-            die("Prepare failed for phone numbers: " . $conn->error);
-        }
-
-        foreach ($mobileNumbers as $mobileNumber) {
-            if (empty($mobileNumber)) {
-                continue;
-            }
-            $phoneStmt->bind_param("is", $subscriberId, $mobileNumber);
-            if (!$phoneStmt->execute()) {
-                die("Execute failed for phone numbers: " . $phoneStmt->error);
-            }
-        }
-
-        // Ensure $emails is an array even if a single string is passed
-        if (is_string($emails)) {
-            $emails = [$emails];
-        } elseif (!is_array($emails)) {
-            die("Emails is not an array: " . var_export($emails, true));
-        }
-
-        // Insert emails into emails table
-        $emailSQL = "INSERT INTO emails (subscriber_id, email) VALUES (?, ?)";
-        $emailStmt = $conn->prepare($emailSQL);
-        if (!$emailStmt) {
-            die("Prepare failed for emails: " . $conn->error);
-        }
-
-        foreach ($emails as $email) {
-            if (empty($email)) {
-                continue;
-            }
-            $emailStmt->bind_param("is", $subscriberId, $email);
-            if (!$emailStmt->execute()) {
-                die("Execute failed for emails: " . $emailStmt->error);
-            }
-        }
-
-        // Insert into event_subscriber_mapping table
-        $insertMappingSQL = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
-        $mappingStmt = $conn->prepare($insertMappingSQL);
-        if (!$mappingStmt) {
-            die("Prepare failed for event mapping: " . $conn->error);
-        }
-        $mappingStmt->bind_param("iiii", $subscriberId, $event_id, $organizer_id, $category_id);
-        if (!$mappingStmt->execute()) {
-            die("Execute failed for event mapping: " . $mappingStmt->error);
-        }
-
-        // Insert designations and organizations into designation_organization table
-        if (is_array($designationsOrganizations)) {
-            $doSQL = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
-            $doStmt = $conn->prepare($doSQL);
-            if (!$doStmt) {
-                die("Prepare failed for designation_organization: " . $conn->error);
-            }
-
-            foreach ($designationsOrganizations as $do) {
-                $designation = $do['designation'] ?? '';
-                $organization = $do['organization'] ?? '';
-
-                if (empty($designation) && empty($organization)) {
-                    continue; // Skip if both designation and organization are empty
-                }
-
-                $doStmt->bind_param("iss", $subscriberId, $designation, $organization);
-                if (!$doStmt->execute()) {
-                    die("Execute failed for designation_organization: " . $doStmt->error);
-                }
-            }
-        }
-
-        return true;
-    } else {
-        die("Execute failed: " . $stmt->error);
-    }
-}
 
 
 if (isset($_POST["Submit"])) { 
@@ -601,8 +504,8 @@ if ($designation || $organization) {
 
 // Handle form submission for Bulk Add by Event
 else if (isset($_POST["AddSubscribersEvent"])) {
-    // Bulk Add by Event Form
-    $event = isset($_POST["event"]) ? $_POST["event"] : null;
+    // Get event, category, and organizer details from the form submission
+    $event = isset($_POST["event"]) ? $_POST["event"] : null;  
     $category = isset($_POST["category"]) ? $_POST["category"] : null;
     $organizer = isset($_POST["organizer"]) ? $_POST["organizer"] : null;
 
@@ -615,13 +518,19 @@ else if (isset($_POST["AddSubscribersEvent"])) {
     $stmt->fetch();
     $stmt->close();
 
+   // Check if event details are valid
+if (!$category_id || !$organizer_id) {
+    die("Invalid event details for event_id: " . htmlspecialchars($event));
+}
+
+
     // Process the uploaded CSV file
     if (isset($_FILES["csvFile"])) {
         $csvFile = $_FILES["csvFile"]["tmp_name"];
         if (($handle = fopen($csvFile, "r")) !== FALSE) {
             // Initialize arrays to store encountered phone numbers and emails
-            $encounteredPhoneNumbers = array();
-            $encounteredEmails = array();
+            $encounteredPhoneNumbers = [];
+            $encounteredEmails = [];
 
             // Skip the first row (header)
             fgetcsv($handle); // Skip the header row
@@ -648,29 +557,106 @@ else if (isset($_POST["AddSubscribersEvent"])) {
 
                     // Check if the phone number or email has already been encountered in this CSV file
                     if (!in_array($mobileNumber, $encounteredPhoneNumbers) && !in_array($email, $encounteredEmails)) {
-                        // Prepare data for the bulk insert function
-                        $mobileNumbers = [$mobileNumber]; // Single phone number as an array
-                        $emails = [$email];              // Single email as an array
-                        $designations = $designation ? explode(",", $designation) : [];
-                        $organizations = $organization ? explode(",", $organization) : [];
+                        // Check if the phone number or email already exists in the database
+                        $subscriberId = null;
 
-                        // Use the existing bulk add function
-                        insertBulkAddData(
-                            $conn,
-                            $fullName,
-                            $mobileNumbers,
-                            $emails,
-                            $designations,
-                            $organizations,
-                            $address,
-                            $event,
-                            $category_id,
-                            $organizer_id
-                        );
+                        // Check if the phone number exists
+                        $phoneSQL = "SELECT subscriber_id FROM phone_numbers WHERE phone_number = ?";
+                        $phoneStmt = $conn->prepare($phoneSQL);
+                        $phoneStmt->bind_param("s", $mobileNumber);
+                        $phoneStmt->execute();
+                        $phoneResult = $phoneStmt->get_result();
+                        if ($phoneResult->num_rows > 0) {
+                            $row = $phoneResult->fetch_assoc();
+                            $subscriberId = $row['subscriber_id'];
+                        }
+                        $phoneStmt->close();
 
-                        // Update encountered phone numbers and emails
-                        $encounteredPhoneNumbers[] = $mobileNumber;
-                        $encounteredEmails[] = $email;
+                        // Check if the email exists (if phone number does not exist)
+                        if (!$subscriberId) {
+                            $emailSQL = "SELECT subscriber_id FROM emails WHERE email = ?";
+                            $emailStmt = $conn->prepare($emailSQL);
+                            $emailStmt->bind_param("s", $email);
+                            $emailStmt->execute();
+                            $emailResult = $emailStmt->get_result();
+                            if ($emailResult->num_rows > 0) {
+                                $row = $emailResult->fetch_assoc();
+                                $subscriberId = $row['subscriber_id'];
+                            }
+                            $emailStmt->close();
+                        }
+
+                        // If no existing subscriber found, insert a new subscriber
+                        if (!$subscriberId) {
+                            $insertSubscriberSQL = "INSERT INTO subscribers (full_name, address) VALUES (?, ?)";
+                            $insertStmt = $conn->prepare($insertSubscriberSQL);
+                            $insertStmt->bind_param("ss", $fullName, $address);
+                            if ($insertStmt->execute()) {
+                                $subscriberId = $insertStmt->insert_id;
+                            } else {
+                                die("Error inserting subscriber: " . $insertStmt->error);
+                            }
+                            $insertStmt->close();
+                        }
+
+                        // Insert the phone number if it's not already associated with the subscriber
+                        if ($mobileNumber && !in_array($mobileNumber, $encounteredPhoneNumbers)) {
+                            $insertPhoneSQL = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
+                            $phoneStmt = $conn->prepare($insertPhoneSQL);
+                            $phoneStmt->bind_param("is", $subscriberId, $mobileNumber);
+                            if (!$phoneStmt->execute()) {
+                                die("Error inserting phone number: " . $phoneStmt->error);
+                            }
+                            $phoneStmt->close();
+                            $encounteredPhoneNumbers[] = $mobileNumber;  // Add to encountered array
+                        }
+
+                        // Insert the email if it's not already associated with the subscriber
+                        if ($email && !in_array($email, $encounteredEmails)) {
+                            $insertEmailSQL = "INSERT INTO emails (subscriber_id, email) VALUES (?, ?)";
+                            $emailStmt = $conn->prepare($insertEmailSQL);
+                            $emailStmt->bind_param("is", $subscriberId, $email);
+                            if (!$emailStmt->execute()) {
+                                die("Error inserting email: " . $emailStmt->error);
+                            }
+                            $emailStmt->close();
+                            $encounteredEmails[] = $email;  // Add to encountered array
+                        }
+
+                        // Insert into designation_organization table if a designation or organization is provided
+                        if ($designation || $organization) {
+                            $insertDOSQL = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
+                            $doStmt = $conn->prepare($insertDOSQL);
+
+                            if (!$doStmt) {
+                                die("Prepare failed for designation_organization: " . $conn->error);
+                            }
+
+                            $designation = $designation ?? ''; // Assign empty string if designation is null
+                            $organization = $organization ?? ''; // Assign empty string if organization is null
+
+                            $doStmt->bind_param("iss", $subscriberId, $designation, $organization);
+
+                            if (!$doStmt->execute()) {
+                                die("Error inserting into designation_organization: " . $doStmt->error);
+                            }
+
+                            $doStmt->close();
+                        }
+
+                        // Insert into event_subscriber_mapping table with the organizer and category
+                        $mappingSQL = "
+                            INSERT INTO event_subscriber_mapping (subscriber_id, event_id, category_id, organizer_id)
+                            VALUES (?, ?, ?, ?)";
+                        $mappingStmt = $conn->prepare($mappingSQL);
+                        if (!$mappingStmt) {
+                            die("Prepare failed for event_subscriber_mapping: " . $conn->error);
+                        }
+                        $mappingStmt->bind_param("iiii", $subscriberId, $event, $category_id, $organizer_id);
+                        if (!$mappingStmt->execute()) {
+                            die("Error inserting event mapping: " . $mappingStmt->error);
+                        }
+                        $mappingStmt->close();
                     }
                 }
             }
@@ -684,8 +670,7 @@ else if (isset($_POST["AddSubscribersEvent"])) {
         }
     }
 }
-
-
+ 
 // Fetch categories from the database (same as before)
 $categories = fetchCategories($conn);
 
@@ -885,18 +870,26 @@ $events = fetchEvents($conn);
             </p>
         </div>
         <div class="mb-3">
-            <label for="event" class="form-label">Event:</label>
-            <select id="event" name="event" class="form-select" required>
-                <option value="" disabled selected>Select Event</option>
-                <?php
-                // Sort the categories array by their values (category names)
-                 asort($events);
-                foreach ($events as $eventId => $event) {
-                echo "<option value='$eventId'>" . $event["event_name"] . "</option>";
-                 }
-                ?>
-            </select>
-        </div>
+    <label for="event" class="form-label">Event:</label>
+    <select id="event" name="event" class="form-select" required>
+        <option value="" disabled selected>Select Event</option>
+        <?php
+        // Sort the events array by the event date in descending order (latest events at the top)
+        usort($events, function($a, $b) {
+            $dateA = strtotime($a["event_date"]);
+            $dateB = strtotime($b["event_date"]);
+            return $dateB - $dateA; // Sort in descending order
+        });
+
+        // Loop through the sorted events and display each as an option
+        foreach ($events as $event) {
+            // echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . " (ID: " . htmlspecialchars($event["event_id"]) . ")</option>";
+            echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . "</option>";
+        }        
+        ?>
+    </select>
+</div>
+
         <button type="submit" name="AddSubscribersEvent" class="btn btn-outline-success">Add Subscribers</button>
     </form>
 </div>

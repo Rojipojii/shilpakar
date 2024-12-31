@@ -47,12 +47,13 @@ function getTotalRepeatVisitors($conn) {
     // SQL query to count the number of subscriber_ids that have been repeated (appear more than once)
     $sql = "
         SELECT COUNT(*) AS total
-        FROM (
-            SELECT subscriber_id
-            FROM event_subscriber_mapping
-            GROUP BY subscriber_id
-            HAVING COUNT(subscriber_id) > 1
-        ) AS repeated_subscribers
+FROM (
+    SELECT subscriber_id
+    FROM event_subscriber_mapping
+    GROUP BY subscriber_id
+    HAVING COUNT(CASE WHEN event_id IS NOT NULL THEN 1 END) > 1
+) AS repeated_subscribers
+
     ";
 
     // Execute the query
@@ -469,7 +470,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
             $sqlTopAttendees = "
                 SELECT 
     subscribers.*, 
-    COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+    COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
 FROM 
     subscribers
 LEFT JOIN 

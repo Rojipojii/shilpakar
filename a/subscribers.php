@@ -97,7 +97,6 @@ function generateVCF($conn, $subscriberID, $uniquePhoneNumbers, $uniqueEmails) {
     }
 }
 
-// Fetch all unique phone numbers and emails for the subscriber
 function fetchSubscriberContacts($conn, $subscriberID) {
     global $uniquePhoneNumbers, $uniqueEmails;
 
@@ -108,8 +107,10 @@ function fetchSubscriberContacts($conn, $subscriberID) {
     $stmtEmail->execute();
     $resultEmail = $stmtEmail->get_result();
 
+    // Normalize emails to lowercase and add to the uniqueEmails array
     while ($emailData = $resultEmail->fetch_assoc()) {
-        $uniqueEmails[] = $emailData['email'];
+        $normalizedEmail = strtolower($emailData['email']);  // Convert email to lowercase
+        $uniqueEmails[] = $normalizedEmail;
     }
 
     // Fetch all phone numbers from the 'phone_numbers' table
@@ -127,6 +128,7 @@ function fetchSubscriberContacts($conn, $subscriberID) {
     $uniqueEmails = array_unique($uniqueEmails);
     $uniquePhoneNumbers = array_unique($uniquePhoneNumbers);
 }
+
 
 // Handle VCF download action
 if (isset($_GET["id"])) {
@@ -290,7 +292,7 @@ if (!empty($eventFilter)) {
     
     
     $sql = "SELECT subscribers.*, 
-               COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+               COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
         FROM subscribers
         LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
         WHERE event_subscriber_mapping.event_id = ?
@@ -307,7 +309,7 @@ if (!empty($eventFilter)) {
      $categoryResult = $categoryStmt->get_result();
 
     $sql = "SELECT subscribers.*, 
-               COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+               COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
         FROM subscribers
         LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
         WHERE event_subscriber_mapping.category_id = ?
@@ -324,7 +326,7 @@ if (!empty($eventFilter)) {
      $organizerResult = $organizerStmt->get_result();
 
     $sql = "SELECT subscribers.*, 
-               COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+               COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
         FROM subscribers
         LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
         WHERE event_subscriber_mapping.organizer_id = ?
@@ -333,7 +335,7 @@ if (!empty($eventFilter)) {
     $stmt->bind_param("i", $organizerFilter);
 } elseif ($filter === 'repeated') {
     $sql = "SELECT subscribers.*, 
-                   COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
+                   COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
             FROM subscribers
             LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
             GROUP BY subscribers.subscriber_id
@@ -342,11 +344,12 @@ if (!empty($eventFilter)) {
     $stmt = $conn->prepare($sql);
 } else {
     $sql = "SELECT subscribers.*, 
-                   COUNT(event_subscriber_mapping.subscriber_id) AS number_of_events_attended
-            FROM subscribers
-            LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
-            GROUP BY subscribers.subscriber_id
-            ORDER BY subscribers.subscriber_id DESC";
+       COUNT(CASE WHEN event_subscriber_mapping.event_id IS NOT NULL THEN 1 END) AS number_of_events_attended
+FROM subscribers
+LEFT JOIN event_subscriber_mapping ON subscribers.subscriber_id = event_subscriber_mapping.subscriber_id
+GROUP BY subscribers.subscriber_id
+ORDER BY subscribers.subscriber_id DESC;
+";
     $stmt = $conn->prepare($sql);
 }
 
@@ -419,7 +422,7 @@ if (isset($categoryResult) && $categoryResult !== null && $categoryResult->num_r
     $attendeesResult = $attendeesStmt->get_result();
     $attendeesCount = $attendeesResult->fetch_assoc()['total_attendees'];
 
-    echo "<h3>" . htmlspecialchars($category['category_name']) . " - " . $attendeesCount . " attendees</h3>";
+    echo "<h3>" . htmlspecialchars($category['category_name']) . " - " . $attendeesCount . "</h3>";
 }
 ?>
 
@@ -436,7 +439,7 @@ if (isset($organizerResult) && $organizerResult !== null && $organizerResult->nu
     $attendeesResult = $attendeesStmt->get_result();
     $attendeesCount = $attendeesResult->fetch_assoc()['total_attendees'];
 
-    echo "<h3>" . htmlspecialchars($organizer['organizer_name']) . " - " . $attendeesCount . " attendees</h3>";
+    echo "<h3>" . htmlspecialchars($organizer['organizer_name']) . " - " . $attendeesCount . "</h3>";
 }
 ?>
 
@@ -518,14 +521,16 @@ if ($result->num_rows > 0) {
         }
 
         // Fetch all emails for the subscriber from the database
-        $sqlEmail = "SELECT email FROM emails WHERE subscriber_id = ?";
-        $stmtEmail = $conn->prepare($sqlEmail);
-        $stmtEmail->bind_param("i", $row["subscriber_id"]);
-        $stmtEmail->execute();
-        $resultEmail = $stmtEmail->get_result();
-        while ($emailData = $resultEmail->fetch_assoc()) {
-            $emails[] = $emailData['email']; // Add each email to the array
-        }
+$sqlEmail = "SELECT email FROM emails WHERE subscriber_id = ?";
+$stmtEmail = $conn->prepare($sqlEmail);
+$stmtEmail->bind_param("i", $row["subscriber_id"]);
+$stmtEmail->execute();
+$resultEmail = $stmtEmail->get_result();
+while ($emailData = $resultEmail->fetch_assoc()) {
+    // Normalize email to lowercase
+    $normalizedEmail = strtolower(trim($emailData['email']));
+    $emails[] = $normalizedEmail; // Add each normalized email to the array
+}
 
         // Remove duplicates by making the arrays unique
         $phoneNumbers = array_unique($phoneNumbers);
