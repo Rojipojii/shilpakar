@@ -29,3 +29,7 @@ RewriteRule ^phone$ listnumbers.php [L]
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^merge$ merge.php [L]
+
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^list$ subscribers.php [L]

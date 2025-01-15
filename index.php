@@ -92,22 +92,26 @@ function insertData(
     $stmtEmail->close();
 
     // Insert designations and organizations into designation_organization table
-    $sqlDesignationOrganization = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
-    $stmtDesignationOrganization = $conn->prepare($sqlDesignationOrganization);
-    if (!$stmtDesignationOrganization) {
-        error_log("Prepare failed: " . $conn->error);
+$sqlDesignationOrganization = "INSERT INTO designation_organization (subscriber_id, designation, organization) VALUES (?, ?, ?)";
+$stmtDesignationOrganization = $conn->prepare($sqlDesignationOrganization);
+if (!$stmtDesignationOrganization) {
+    error_log("Prepare failed: " . $conn->error);
+    return false;
+}
+
+// Loop through designations and organizations arrays
+for ($i = 0; $i < max(count($designations), count($organizations)); $i++) {
+    $designation = $designations[$i] ?? null; // Preserve original case for designation
+    $organization = $organizations[$i] ?? null; // Preserve original case for organization
+
+    $stmtDesignationOrganization->bind_param("iss", $subscriberId, $designation, $organization);
+    if (!$stmtDesignationOrganization->execute()) {
+        error_log("Execute failed: " . $stmtDesignationOrganization->error);
         return false;
     }
-    for ($i = 0; $i < max(count($designations), count($organizations)); $i++) {
-        $designation = $designations[$i] ?? null;
-        $organization = $organizations[$i] ?? null;
-        $stmtDesignationOrganization->bind_param("iss", $subscriberId, $designation, $organization);
-        if (!$stmtDesignationOrganization->execute()) {
-            error_log("Execute failed: " . $stmtDesignationOrganization->error);
-            return false;
-        }
-    }
-    $stmtDesignationOrganization->close();
+}
+$stmtDesignationOrganization->close();
+
 
     // Insert into event_subscriber_mapping
     if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
@@ -207,8 +211,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $mobileNumber = $_POST["mobileNumber"];
     $fullName = ucwords(strtolower(trim($_POST["fullName"])));
     $email = strtolower(trim($_POST["email"]));
-    $designation = ucwords(strtolower(trim($_POST["designation"])));
-    $organization = ucwords(strtolower(trim($_POST["organization"])));
+    $designation = trim($_POST["designation"]); // Preserve original case
+    $organization = trim($_POST["organization"]); // Preserve original case    
     $number_of_events_attended = 1;
 
     // Use trim to remove leading and trailing spaces from the full name

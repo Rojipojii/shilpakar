@@ -187,7 +187,9 @@ $organizers = fetchOrganizersWithAttendees($conn);
         echo "<tr>";
         echo "<td>";
         // Make the organizer name a hyperlink
-        echo "<a href='subscribers.php?organizer_id=$organizerId' class='organizer-name' data-organizer-id='$organizerId'>$organizerName</a>";
+        echo '<a href="subscribers.php?organizer_id=' . $organizerId . '" class="organizer-name" data-organizer-id="' . $organizerId . '" style="text-decoration: underline; color: inherit;" 
+    onmouseover="this.style.textDecoration=\'none\'; this.style.color=\'inherit\';" 
+    onmouseout="this.style.textDecoration=\'underline\'; this.style.color=\'inherit\';">' . $organizerName . '</a>';
         echo "</td>";
         echo "<td>";
         // Display attendees count without a hyperlink

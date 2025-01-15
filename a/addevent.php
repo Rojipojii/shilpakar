@@ -261,7 +261,9 @@ $organizers = fetchOrganizers($conn);
         echo "<tr>";
         echo "<td>";
         // Make the event name a hyperlink
-        echo '<a href="subscribers.php?event_id=' . $eventId . '" class="event-name" data-event-id="' . $eventId . '">' . $eventName . '</a>';
+        echo '<a href="subscribers.php?event_id=' . $eventId . '" class="event-name" data-event-id="' . $eventId . '"style="text-decoration: underline; color: inherit;" 
+    onmouseover="this.style.textDecoration=\'none\'; this.style.color=\'inherit\';" 
+    onmouseout="this.style.textDecoration=\'underline\'; this.style.color=\'inherit\';">' . $eventName . '</a>';
         echo "</td>";
         echo "<td>";
         $eventDateFormatted = date("d F Y", strtotime($eventDate));
@@ -289,7 +291,7 @@ $organizers = fetchOrganizers($conn);
                 <div class="col-md-4">
                     <!-- Add Event Form -->
                     <h2>Add Event</h2>
-                    <form id="eventForm" class="add-event-form" method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>" class="form-horizontal">
+                    <form id="eventForm" class="add-event-form" method="post" action="<?php echo $_SERVER['PHP_SELF']; ?>"  onsubmit="return validateForm()" class="form-horizontal">
                         <div class="form-group">
                             <label for="eventName">Event Name:</label>
                             <input type="text" id="eventName" name="eventName" class="form-control" required>
@@ -297,6 +299,9 @@ $organizers = fetchOrganizers($conn);
                         <div class="form-group">
         <label for="eventDate">Event Date:</label>
         <input type="text" id="eventDate" name="eventDate" class="form-control" placeholder="YYYY-MM-DD" required>
+        <div id="eventDateError" class="invalid-feedback" style="display:none;">
+        Please select a date.
+    </div>
     </div>
     <script>
         // Initialize Flatpickr datepicker
@@ -305,12 +310,12 @@ $organizers = fetchOrganizers($conn);
             enableTime: false, // Disable time selection
             altInput: true, // Show the date in a readable format (optional)
             altFormat: 'F j, Y', // Date display format (optional)
-            minDate: 'today', // Set minimum selectable date to today
         });
 
         // Validate form before submission
         function validateForm() {
             const eventDateField = document.getElementById('eventDate');
+            const eventDateError = document.getElementById('eventDateError');
             const eventDateValue = eventDateField.value;
 
             // Check if the date is empty
@@ -318,10 +323,12 @@ $organizers = fetchOrganizers($conn);
                 eventDateField.value = ''; // Clear any existing value
                 eventDateField.placeholder = "Please select a date!"; // Update placeholder with error message
                 eventDateField.classList.add('is-invalid'); // Add Bootstrap invalid class for styling
+                eventDateError.style.display = 'block'; // Show error message
                 return false; // Prevent form submission
             }
 
             eventDateField.classList.remove('is-invalid'); // Remove invalid class if valid
+            eventDateError.style.display = 'none'; 
             return true; // Allow form submission
         }
     </script>

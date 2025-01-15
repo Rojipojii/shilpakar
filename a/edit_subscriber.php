@@ -1,15 +1,23 @@
 <?php
 session_start();
 
-// Include the necessary files
-require_once "db.php";
-
 // Check if user is logged in
 if (!isset($_SESSION['id'])) {
     // If not logged in, redirect to login page
     header("Location: index.php?message=You should login first");
     exit();
 }
+
+// Include the necessary files
+require_once "db.php";
+require_once "mergeGroups.php"; // Include the function file
+
+// Get the total number of groups to merge
+$totalGroupsToMerge = getGroupsToMerge($conn);
+
+// Store the result in session
+$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
+
 
 
 // Check if the 'merge_success' parameter is in the URL
@@ -35,7 +43,6 @@ $allCategories = [];
 while ($category = $allCategoriesResult->fetch_assoc()) {
     $allCategories[] = $category;
 }
-
 
 // Fetch subscriber details based on the ID passed through URL
 if (isset($_GET['id']) && is_numeric($_GET['id'])) {
@@ -69,7 +76,7 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $subscriberPhones = array_unique($subscriberPhones);
         $subscriberPhone = implode(', ', $subscriberPhones);
 
-       // Fetch all emails associated with the subscriber
+// Fetch all emails associated with the subscriber
 $emailQuery = $conn->prepare("SELECT email FROM emails WHERE subscriber_id = ?");
 if ($emailQuery === false) {
     die('MySQL prepare error for email query: ' . $conn->error);
@@ -91,7 +98,7 @@ $subscriberEmails = array_unique($subscriberEmails);
 $subscriberEmail = implode(', ', $subscriberEmails);
 
 
-      // Fetch all designations and organizations associated with the subscriber
+// Fetch all designations and organizations associated with the subscriber
 $doQuery = $conn->prepare("SELECT designation, organization FROM designation_organization WHERE subscriber_id = ?");
 if ($doQuery === false) {
     die('MySQL prepare error for designation_organization query: ' . $conn->error);
@@ -125,38 +132,27 @@ $doQuery->close();
 $subscriberDesignations = array_column($uniquePairs, 'designation');
 $subscriberOrganizations = array_column($uniquePairs, 'organization');
 
-
-
-
-        // Fetch unique events attended by subscribers with the same phone number or email
-        $eventsQuery = $conn->prepare("SELECT DISTINCT e.event_id, e.event_name, e.event_date
-        FROM event_subscriber_mapping esm
-        INNER JOIN events e ON esm.event_id = e.event_id
-        WHERE esm.subscriber_id IN (
-        SELECT s.subscriber_id
-        FROM subscribers s
-        LEFT JOIN phone_numbers pn ON s.subscriber_id = pn.subscriber_id
-        LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
-        WHERE pn.phone_number = ? OR e.email = ?
-        )
-        ORDER BY e.event_date DESC"); // Latest event first
-        if ($eventsQuery === false) {
-        die('MySQL prepare error for events query: ' . $conn->error);
-        }
-        $eventsQuery->bind_param("ss", $subscriberPhone, $subscriberEmail);
-        $eventsQuery->execute();
+// Fetch unique events attended by subscribers with the same phone number or email
+$eventsQuery = $conn->prepare("
+SELECT DISTINCT e.event_id, e.event_name, e.event_date
+FROM event_subscriber_mapping esm
+INNER JOIN events e ON esm.event_id = e.event_id
+WHERE esm.subscriber_id = ?
+");
+if ($eventsQuery === false) {
+die('MySQL prepare error for events query: ' . $conn->error);
+}
+$eventsQuery->bind_param("i", $subscriberID);
+$eventsQuery->execute();       
 $eventsResult = $eventsQuery->get_result();
 $eventsAttended = [];
 
 while ($event = $eventsResult->fetch_assoc()) {
-    $eventUrl = "list?event_id=" . $event['event_id'];
-    $eventsAttended[] = '<a href="' . $eventUrl . '" class="users-list-name" style="display: inline; text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . htmlspecialchars($event['event_name']) . '</a>';
+        $eventsAttended[] = $event['event_id']; 
 }
-
 $subscriber['events_attended'] = implode(', ', $eventsAttended);
 
-
-       // Fetch the unique categories attended by the subscriber, including newly inserted ones 
+// Fetch the unique categories attended by the subscriber, including newly inserted ones 
 $categoriesQuery = $conn->prepare("
 SELECT DISTINCT c.category_id, c.category_name
 FROM event_subscriber_mapping esm
@@ -211,9 +207,7 @@ while ($organizer = $organizersResult->fetch_assoc()) {
 // Convert the array of organizer IDs to a comma-separated string
 $subscriber['organizers_affiliated'] = implode(',', $organizersAffiliated);
 
-
-
-    } else {
+} else {
         header("Location: subscribers.php");
         exit();
     }
@@ -225,13 +219,14 @@ $subscriber['organizers_affiliated'] = implode(',', $organizersAffiliated);
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Retrieve edited subscriber details from the form
     $full_name = $_POST['full_name'];
-    $phone_numbers = $_POST['phone_number'];
+    $phone_numbers = $_POST['phone_number'] ;
     $emails = $_POST['email'];
     $address = $_POST['address'];
-    $designation = $_POST['designation']; // New field
-    $organization = $_POST['organization']; // New field
-    $selectedEvents = $_POST['events'] ?? [];
+    $designation = $_POST['designation'] ?? []; // New field
+    $organization = $_POST['organization'] ?? []; // New field
+    $selectedEvents = $_POST['events_attended'] ?? [];
     $selectedCategories = $_POST['categories'] ?? [];
+    
 
     // Update the subscriber details in the 'subscribers' table
     $updateStmt = $conn->prepare("UPDATE subscribers SET full_name = ?, address = ? WHERE subscriber_id = ?");
@@ -239,170 +234,105 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($updateStmt->execute()) {
         
-        // Function to check for duplicate phone numbers and emails
-function isDuplicate($conn, $table, $column, $value, $subscriberID = null) {
-    $query = "SELECT $column FROM $table WHERE $column = ?";
-    if ($subscriberID) {
-        $query .= " AND subscriber_id != ?";
-    }
-    $stmt = $conn->prepare($query);
-    if ($subscriberID) {
-        $stmt->bind_param("si", $value, $subscriberID);
-    } else {
-        $stmt->bind_param("s", $value);
-    }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    return $result->num_rows > 0; // Returns true if duplicate found
-}
+        // Function to handle insert/update for individual fields
+        function upsertField($conn, $table, $field, $values, $subscriberID, $fieldID) {
+            // If values are empty, delete all records for this subscriber
+            if (empty($values)) {
+                $deleteStmt = $conn->prepare("DELETE FROM $table WHERE subscriber_id = ?");
+                $deleteStmt->bind_param("i", $subscriberID);
+                $deleteStmt->execute();
+                return;
+            }
 
-// Function to handle insert/update for individual fields
-function upsertField($conn, $table, $field, $values, $subscriberID, $fieldID) {
-    // If values are empty, delete all records for this subscriber
-    if (empty($values)) {
-        $deleteStmt = $conn->prepare("DELETE FROM $table WHERE subscriber_id = ?");
-        $deleteStmt->bind_param("i", $subscriberID);
-        $deleteStmt->execute();
-        return;
-    }
+            // Get all current IDs for this subscriber
+            $query = $conn->prepare("SELECT $fieldID FROM $table WHERE subscriber_id = ?");
+            $query->bind_param("i", $subscriberID);
+            $query->execute();
+            $result = $query->get_result();
 
-    // Get all current IDs for this subscriber
-    $query = $conn->prepare("SELECT $fieldID FROM $table WHERE subscriber_id = ?");
-    $query->bind_param("i", $subscriberID);
-    $query->execute();
-    $result = $query->get_result();
+            $existingIDs = [];
+            while ($row = $result->fetch_assoc()) {
+                $existingIDs[] = $row[$fieldID];
+            }
 
-    $existingIDs = [];
-    while ($row = $result->fetch_assoc()) {
-        $existingIDs[] = $row[$fieldID];
-    }
+            // Handle provided values
+            foreach ($values as $value) {
+                $value = trim($value);
+                if (empty($value)) {
+                    continue; // Skip empty values
+                }
 
-    // Handle provided values
-    foreach ($values as $value) {
-        $value = trim($value);
-        if (empty($value)) {
-            continue; // Skip empty values
-        }
+                // Insert new record
+                $insertStmt = $conn->prepare("INSERT INTO $table (subscriber_id, $field) VALUES (?, ?)");
+                $insertStmt->bind_param("is", $subscriberID, $value);
+                $insertStmt->execute();
+            }
 
-        // Check if the record exists for this value
-        $checkStmt = $conn->prepare("SELECT $fieldID FROM $table WHERE subscriber_id = ? AND $field = ?");
-        $checkStmt->bind_param("is", $subscriberID, $value);
-        $checkStmt->execute();
-        $checkResult = $checkStmt->get_result();
-
-        if ($checkResult->num_rows > 0) {
-            // Record exists, remove it from the deletion list
-            $row = $checkResult->fetch_assoc();
-            $existingIDs = array_diff($existingIDs, [$row[$fieldID]]);
-        } else {
-            // Insert new record
-            $insertStmt = $conn->prepare("INSERT INTO $table (subscriber_id, $field) VALUES (?, ?)");
-            $insertStmt->bind_param("is", $subscriberID, $value);
-            $insertStmt->execute();
-        }
-    }
-
-    // Delete records for IDs not in the new values
-    foreach ($existingIDs as $idToDelete) {
-        $deleteStmt = $conn->prepare("DELETE FROM $table WHERE $fieldID = ?");
-        $deleteStmt->bind_param("i", $idToDelete);
-        $deleteStmt->execute();
-    }
-}
-
-// Main processing
-$errors = [];
-$phone_numbers_to_insert = [];
-$emails_to_insert = [];
-
-// Check and upsert phone numbers (only insert non-duplicate numbers)
-foreach ($phone_numbers as $phone) {
-    if (empty($phone)) continue; // Skip empty values
-    if (!isDuplicate($conn, 'phone_numbers', 'phone_number', $phone, $subscriberID)) {
-        $phone_numbers_to_insert[] = $phone;
-    } else {
-        $errors[] = "Phone number $phone already exists in the database.";
-    }
-}
-
-// Check and upsert emails (only insert non-duplicate emails)
-foreach ($emails as $email) {
-    if (empty($email)) continue; // Skip empty values
-    if (!isDuplicate($conn, 'emails', 'email', $email, $subscriberID)) {
-        $emails_to_insert[] = $email;
-    } else {
-        $errors[] = "Email $email already exists in the database.";
-    }
-}
-
-// Process phone numbers and emails even if there are errors
-upsertField($conn, 'phone_numbers', 'phone_number', $phone_numbers_to_insert, $subscriberID, 'phone_id');
-upsertField($conn, 'emails', 'email', $emails_to_insert, $subscriberID, 'email_id');
-
-function upsertDesignationOrganization($conn, $table, $designations, $organizations, $subscriberID) {
-    // Ensure both arrays have the same number of elements
-    $count = max(count($designations), count($organizations));
-    
-    // Fetch existing IDs and records for this subscriber
-    $query = $conn->prepare("SELECT des_org_id, designation, organization FROM $table WHERE subscriber_id = ?");
-    $query->bind_param("i", $subscriberID);
-    $query->execute();
-    $result = $query->get_result();
-    
-    $existingIDs = [];
-    $existingRecords = [];
-    while ($row = $result->fetch_assoc()) {
-        $existingIDs[] = $row['des_org_id'];
-        $existingRecords[] = ['designation' => $row['designation'], 'organization' => $row['organization']];
-    }
-
-    for ($i = 0; $i < $count; $i++) {
-        $designation = isset($designations[$i]) ? trim($designations[$i]) : '';
-        $organization = isset($organizations[$i]) ? trim($organizations[$i]) : '';
-
-        if (empty($designation) && empty($organization)) {
-            continue; // Skip empty rows
-        }
-
-        // Check if the record already exists (case-insensitive check)
-        $found = false;
-        foreach ($existingRecords as $index => $existingRecord) {
-            // Compare both designation and organization case-sensitively (allow for case changes)
-            if ($existingRecord['designation'] === $designation && $existingRecord['organization'] === $organization) {
-                // Record exists, no need to insert, mark as found
-                $existingIDs = array_diff($existingIDs, [$existingIDs[$index]]);
-                $found = true;
-                break;
+            // Delete records for IDs not in the new values
+            foreach ($existingIDs as $idToDelete) {
+                $deleteStmt = $conn->prepare("DELETE FROM $table WHERE $fieldID = ?");
+                $deleteStmt->bind_param("i", $idToDelete);
+                $deleteStmt->execute();
             }
         }
 
-        if (!$found) {
-            // Insert new record if no match is found
-            $insertStmt = $conn->prepare(
-                "INSERT INTO $table (subscriber_id, designation, organization) VALUES (?, ?, ?)"
-            );
-            $insertStmt->bind_param("iss", $subscriberID, $designation, $organization);
-            $insertStmt->execute();
-        } else {
-            // If the record exists, perform an update (even if only the case changed)
-            $updateStmt = $conn->prepare(
-                "UPDATE $table SET designation = ?, organization = ? WHERE subscriber_id = ? AND des_org_id = ?"
-            );
-            $updateStmt->bind_param("ssii", $designation, $organization, $subscriberID, $existingIDs[$index]);
-            $updateStmt->execute();
-        }
-    }
+        // Process phone numbers and emails without checking for duplicates
+        upsertField($conn, 'phone_numbers', 'phone_number', $phone_numbers, $subscriberID, 'phone_id');
+        upsertField($conn, 'emails', 'email', $emails, $subscriberID, 'email_id');
 
-    // Delete old records if any
-    foreach ($existingIDs as $idToDelete) {
-        $deleteStmt = $conn->prepare("DELETE FROM $table WHERE des_org_id = ?");
-        $deleteStmt->bind_param("i", $idToDelete);
-        $deleteStmt->execute();
-    }
-}
+        function upsertDesignationOrganization($conn, $table, $designations, $organizations, $subscriberID) {
+            // Ensure both arrays have the same number of elements
+            $count = max(count($designations), count($organizations));
+            
+            // Fetch existing IDs and records for this subscriber
+            $query = $conn->prepare("SELECT des_org_id, designation, organization FROM $table WHERE subscriber_id = ?");
+            $query->bind_param("i", $subscriberID);
+            $query->execute();
+            $result = $query->get_result();
+            
+            $existingIDs = [];
+            while ($row = $result->fetch_assoc()) {
+                $existingIDs[] = $row['des_org_id'];
+            }
+            $result->close();
+        
+            // Track if any valid records are inserted
+            $hasValidData = false;
+        
+            for ($i = 0; $i < $count; $i++) {
+                $designation = isset($designations[$i]) ? trim($designations[$i]) : '';
+                $organization = isset($organizations[$i]) ? trim($organizations[$i]) : '';
+        
+                if (!empty($designation) || !empty($organization)) {
+                    // Insert new record if valid data exists
+                    $insertStmt = $conn->prepare(
+                        "INSERT INTO $table (subscriber_id, designation, organization) VALUES (?, ?, ?)"
+                    );
+                    $insertStmt->bind_param("iss", $subscriberID, $designation, $organization);
+                    $insertStmt->execute();
+                    $insertStmt->close();
+                    $hasValidData = true;
+                }
+            }
+        
+            // Delete old records only if we successfully inserted valid new data or if no data remains
+            if (!$hasValidData || $count > 0) {
+                foreach ($existingIDs as $idToDelete) {
+                    $deleteStmt = $conn->prepare("DELETE FROM $table WHERE des_org_id = ?");
+                    $deleteStmt->bind_param("i", $idToDelete);
+                    $deleteStmt->execute();
+                    $deleteStmt->close();
+                }
+            }
+        
+            // If no valid data was provided and table cleanup occurred, handle accordingly (optional)
+            if (!$hasValidData && empty($existingIDs)) {
+                // Handle cases where no records remain (if necessary)
+            }
+        }       
 
-
-upsertDesignationOrganization($conn, 'designation_organization', $designation, $organization, $subscriberID);
+        // Insert designation and organization
+        upsertDesignationOrganization($conn, 'designation_organization', $designation, $organization, $subscriberID);
 
 
 // Log errors if any
@@ -417,45 +347,147 @@ if (!empty($errors)) {
 // Start a transaction to ensure atomicity
 $conn->begin_transaction();
 
-// Check for existing categories
-$existingCategoriesQuery = $conn->prepare("SELECT category_id FROM event_subscriber_mapping WHERE subscriber_id = ?");
+
+// Fetch existing events for the subscriber
+$existingEventsQuery = $conn->prepare("
+SELECT event_id 
+FROM event_subscriber_mapping 
+WHERE subscriber_id = ?
+");
+$existingEventsQuery->bind_param("i", $subscriberID);
+$existingEventsQuery->execute();
+$existingEventsResult = $existingEventsQuery->get_result();
+
+$existingEvents = [];
+while ($row = $existingEventsResult->fetch_assoc()) {
+$existingEvents[] = $row['event_id'];
+}
+
+// Fetch existing categories for the subscriber
+$existingCategoriesQuery = $conn->prepare("
+SELECT DISTINCT category_id 
+FROM event_subscriber_mapping 
+WHERE subscriber_id = ?
+");
 $existingCategoriesQuery->bind_param("i", $subscriberID);
 $existingCategoriesQuery->execute();
 $existingCategoriesResult = $existingCategoriesQuery->get_result();
+
 $existingCategories = [];
 while ($row = $existingCategoriesResult->fetch_assoc()) {
-    $existingCategories[] = $row['category_id'];
+$existingCategories[] = $row['category_id'];
 }
 
-// Add new categories
-foreach ($selectedCategories as $category) {
-    if (!in_array($category, $existingCategories)) {
-        $insertCategoryStmt = $conn->prepare("INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)");
-        $insertCategoryStmt->bind_param("ii", $subscriberID, $category);
-        if (!$insertCategoryStmt->execute()) {
-            echo "Error: " . $insertCategoryStmt->error;
-            $conn->rollback(); // Rollback on error
-            exit;
+// Add new events and ensure their categories exist
+$eventDetailsQuery = $conn->prepare("
+SELECT event_id, category_id, organizer_id 
+FROM events 
+WHERE event_id = ?
+");
+foreach ($selectedEvents as $eventID) {
+if (!in_array($eventID, $existingEvents)) {
+    // Fetch event details
+    $eventDetailsQuery->bind_param("i", $eventID);
+    $eventDetailsQuery->execute();
+    $eventDetailsResult = $eventDetailsQuery->get_result();
+
+    if ($eventDetails = $eventDetailsResult->fetch_assoc()) {
+        // Ensure the category exists
+        if (!in_array($eventDetails['category_id'], $existingCategories)) {
+            $insertCategoryStmt = $conn->prepare("
+                INSERT INTO event_subscriber_mapping (subscriber_id, category_id) 
+                VALUES (?, ?)
+            ");
+            $insertCategoryStmt->bind_param("ii", $subscriberID, $eventDetails['category_id']);
+            if (!$insertCategoryStmt->execute()) {
+                throw new Exception("Error inserting category_id {$eventDetails['category_id']}: " . $insertCategoryStmt->error);
+            }
+            $existingCategories[] = $eventDetails['category_id']; // Update the existing categories list
         }
+
+        // Insert the event
+        $insertEventStmt = $conn->prepare("
+            INSERT INTO event_subscriber_mapping (subscriber_id, event_id, category_id, organizer_id) 
+            VALUES (?, ?, ?, ?)
+        ");
+        $insertEventStmt->bind_param(
+            "iiii",
+            $subscriberID,
+            $eventDetails['event_id'],
+            $eventDetails['category_id'],
+            $eventDetails['organizer_id']
+        );
+        if (!$insertEventStmt->execute()) {
+            throw new Exception("Error inserting event_id {$eventDetails['event_id']}: " . $insertEventStmt->error);
+        }
+    } else {
+        throw new Exception("Event ID $eventID not found in events table.");
     }
 }
+}
 
-// Remove unselected categories
+// Remove unselected events and check if their categories can be removed
+foreach ($existingEvents as $eventID) {
+if (!in_array($eventID, $selectedEvents)) {
+    // Remove the event
+    $deleteEventStmt = $conn->prepare("
+        DELETE FROM event_subscriber_mapping 
+        WHERE subscriber_id = ? AND event_id = ?
+    ");
+    $deleteEventStmt->bind_param("ii", $subscriberID, $eventID);
+    if (!$deleteEventStmt->execute()) {
+        throw new Exception("Error deleting event_id $eventID: " . $deleteEventStmt->error);
+    }
+}
+}
+
+// Handle category cleanup: remove categories not associated with any selected events
 foreach ($existingCategories as $category) {
-    if (!in_array($category, $selectedCategories)) {
-        $deleteCategoryStmt = $conn->prepare("DELETE FROM event_subscriber_mapping WHERE subscriber_id = ? AND category_id = ?");
+    // Check if there are any remaining events for the current category
+    $checkCategoryEventsStmt = $conn->prepare("
+        SELECT COUNT(*) as count 
+        FROM event_subscriber_mapping 
+        WHERE subscriber_id = ? AND category_id = ?
+    ");
+    $checkCategoryEventsStmt->bind_param("ii", $subscriberID, $category);
+    $checkCategoryEventsStmt->execute();
+    $checkCategoryEventsResult = $checkCategoryEventsStmt->get_result();
+    $categoryEventCountRow = $checkCategoryEventsResult->fetch_assoc();
+
+    // Check if the category is no longer associated with any selected event
+    if ($categoryEventCountRow['count'] == 0 && !in_array($category, $selectedCategories)) {
+        // Ensure that no events in this category exist before deleting the category
+        $checkIfCategoryHasEventsStmt = $conn->prepare("
+            SELECT COUNT(*) as eventCount 
+            FROM event_subscriber_mapping 
+            WHERE subscriber_id = ? AND category_id = ? AND event_id IN (" . implode(',', $selectedEvents) . ")
+        ");
+        $checkIfCategoryHasEventsStmt->bind_param("ii", $subscriberID, $category);
+        $checkIfCategoryHasEventsStmt->execute();
+        $checkIfCategoryHasEventsResult = $checkIfCategoryHasEventsStmt->get_result();
+        $eventCountRow = $checkIfCategoryHasEventsResult->fetch_assoc();
+
+        // If there are still events associated with this category, set the error message
+        if ($eventCountRow['eventCount'] > 0) {
+            $errorMessage = "You cannot remove category ID $category because there are events associated with it.";
+            break;  // Stop further processing
+        }
+
+        // Remove unselected category only if no events are tied to it
+        $deleteCategoryStmt = $conn->prepare("
+            DELETE FROM event_subscriber_mapping 
+            WHERE subscriber_id = ? AND category_id = ?
+        ");
         $deleteCategoryStmt->bind_param("ii", $subscriberID, $category);
         if (!$deleteCategoryStmt->execute()) {
-            echo "Error: " . $deleteCategoryStmt->error;
-            $conn->rollback(); // Rollback on error
-            exit;
+            $errorMessage = "Error deleting category_id $category: " . $deleteCategoryStmt->error;
+            break;  // Stop further processing
         }
     }
 }
 
 // Commit the transaction if all queries were successful
 $conn->commit();
-
 
 // Redirect back to subscribers page after updating
 header("Location: subscribers.php");
@@ -470,7 +502,6 @@ $subscriberOrganizations = isset($subscriberOrganizations) ? $subscriberOrganiza
 
 // Calculate the maximum count
 $maxCount = max(count($subscriberDesignations), count($subscriberOrganizations));
-
 
 ?>
 
@@ -487,9 +518,6 @@ $maxCount = max(count($subscriberDesignations), count($subscriberOrganizations))
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-beta.1/js/select2.min.js"></script>
 
     <style>
-
-
-
 div {
     white-space: normal; /* Default value, allows wrapping inline */
 }
@@ -595,6 +623,14 @@ h5.mb-0,
     margin-bottom: 0 !important; /* Remove bottom margin between form groups */
 }
 
+.error-message {
+            color: red;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
 
 </style>
 </head>
@@ -606,10 +642,10 @@ h5.mb-0,
       <div class="container-fluid">
         <!-- <h1>Edit Subscriber Details</h1> -->
 
-        <form method="POST" class="container mt-4" >
+        <form method="POST" class="container mt-4" onsubmit="return validateForm()">
             <br>
 
-                        <!-- Display the merge success message if merge_success=1 is in the URL -->
+<!-- Display the merge success message if merge_success=1 is in the URL -->
        <div id="organizerResponseMessage">
             <?php
             if (!empty($organizerMessage)) {
@@ -629,7 +665,7 @@ h5.mb-0,
     <label for="full_name" class="form-label mb-0" style="font-size: 1.25rem; font-weight: 500;">Full Name</label><br>
     <input type="text" name="full_name" id="full_name" class="form-control mt-0" value="<?php echo htmlspecialchars($subscriber['full_name']); ?>" required>
 </div>
-        </div>
+</div>
 
 
 <div class="col-md-12 mt-4" id="phonenumber_email">
@@ -649,7 +685,7 @@ h5.mb-0,
                     value="<?php echo htmlspecialchars($phone); ?>" 
                     pattern="^\d{10}$" 
                     title="Phone number must be exactly 10 digits" 
-                    required>
+                    >
                 <button type="button" class="btn btn-link ms-2 add-phone">+</button>
                 <button type="button" class="btn btn-link ms-2 remove-phone">-</button>
             </div>
@@ -665,7 +701,7 @@ h5.mb-0,
                 placeholder="Enter phone number" 
                 pattern="^\d{10}$" 
                 title="Phone number must be exactly 10 digits" 
-                required>
+                >
             <button type="button" class="btn btn-link ms-2 add-phone">+</button>
             <button type="button" class="btn btn-link ms-2 remove-phone">-</button>
         </div>
@@ -708,6 +744,7 @@ h5.mb-0,
             // Reset the value of the new field and ensure it is empty
             const input = newField.querySelector('input');
             input.value = '';
+            input.setCustomValidity(''); 
 
             // Append the new field to the container
             container.appendChild(newField);
@@ -722,13 +759,28 @@ h5.mb-0,
             }
         }
 
-        // Restrict phone number input to 10 digits
+       // Validate phone number input for 10 digits only if not empty
+       function validatePhoneNumber(input) {
+            const value = input.value.trim();
+
+            // If not empty, enforce the 10-digit rule
+            if (value && !/^\d{10}$/.test(value)) {
+                input.setCustomValidity('Phone number must be exactly 10 digits.');
+            } else {
+                input.setCustomValidity(''); // Reset validity
+            }
+        }
+
+        // Restrict phone number input to numbers only and limit to 10 digits
         function restrictTo10Digits(event) {
             const input = event.target;
 
             if (input.name === 'phone_number[]') {
-                // Allow only numbers and limit to 10 digits
+                // Restrict input to numbers and limit to 10 digits
                 input.value = input.value.replace(/\D/g, '').slice(0, 10);
+
+                // Validate the input dynamically
+                validatePhoneNumber(input);
             }
         }
 
@@ -752,6 +804,16 @@ h5.mb-0,
 
         // Attach the input event listener to restrict to 10 digits
         document.body.addEventListener('input', restrictTo10Digits);
+        // Validate all phone numbers before form submission
+        document.querySelector('form').addEventListener('submit', function(event) {
+            const phoneInputs = document.querySelectorAll('input[name="phone_number[]"]');
+            phoneInputs.forEach(validatePhoneNumber);
+
+            // Prevent submission if any field is invalid
+            if (!this.checkValidity()) {
+                event.preventDefault();
+            }
+        });
     });
 </script>
 
@@ -891,7 +953,7 @@ foreach ($allCategories as $category) {
                 $result = $organizerQuery->get_result();
                 $organizerName = $result->fetch_assoc()['organizer_name'] ?? 'Unknown Organizer';
 
-                echo '<a href="list?organizer=' . urlencode($organizerID) . '" style="text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . htmlspecialchars($organizerName) . '</a>';
+                echo '<a href="list?organizer_id=' . urlencode($organizerID) . '" style="text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . htmlspecialchars($organizerName) . '</a>';
 
                 // Add comma only if this is not the last organizer
                 if ($j < $totalOrganizers) {
@@ -907,55 +969,76 @@ foreach ($allCategories as $category) {
 
 
 
-<?php if (!empty($subscriber['events_attended'])): ?>
+<div class="col-md-12 mt-4" id="events-wrapper">
     <div class="row">
         <div class="col-md-12">
-        <label class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Events Attended</label><br>
+            <label for="events" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Events Attended</label>
+            <select name="events_attended[]" id="events_attended" class="form-control select2" multiple="multiple">
             <?php 
-            // Output the events as HTML links
-            $events = explode(',', $subscriber['events_attended']); // assuming events are comma-separated
-            $totalEvents = count($events); // Get the total number of events
-            $i = 1; // Initialize counter
-            foreach ($events as $event) {
-                echo '<a href="#" class="event-link" style="text-decoration: underline; color: black;" onmouseover="this.style.textDecoration=\'none\'" onmouseout="this.style.textDecoration=\'underline\'">' . trim($event) . '</a>';
+            // Assuming events_attended is a comma-separated list of event IDs
+            $eventsAttended = !empty($subscriber['events_attended'])
+                              ?explode(',', $subscriber['events_attended'])
+                              : []; 
 
-                // Add comma only if this is not the last event
-                if ($i < $totalEvents) {
-                    echo ', ';
-                }
-                $i++; // Increment counter
-            }
+            // Sort events alphabetically by event name
+            usort($allEvents, function($a, $b) {
+                return strcmp($a['event_name'], $b['event_name']);
+            });
+        
+            foreach ($allEvents as $event) { 
             ?>
+                <option value="<?php echo $event['event_id']; ?>" 
+                        <?php echo in_array($event['event_id'], $eventsAttended) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($event['event_name']); ?>
+                </option>
+            <?php } ?>
+            </select>
         </div>
     </div>
-<?php endif; ?>
 
 
-
-    </div>
-
+    <!-- Add margin-bottom to create space -->
+<div style="margin-top: 20px;"></div> 
     <div class="row">
     <!-- Submit Button -->
     <div class="col-md-12 d-flex justify-content-center">
         <button type="submit" class="btn btn-success custom-btn">Save</button>
     </div>
 </div>
-
+</div>
 
 </form>
 
 <script>
-    $(document).ready(function() {
-        // Initialize Select2 for categories
-        $('#categories').select2({
-            placeholder: "Pick value",   // Placeholder text for categories
-            allowClear: true,           // Option to clear selection
-            tags: true,                 // Enable tagging
-            width: '100%'               // Ensure it fits the container
-        });
-
-    });
+    function validateForm() {
+        <?php if (!empty($errorMessage)) { ?>
+            alert('<?php echo htmlspecialchars($errorMessage); ?>');
+            return false; // Prevent form submission
+        <?php } ?>
+        return true; // Allow form submission if no error
+    }
 </script>
+
+<script> 
+$(document).ready(function() {
+    // Initialize Select2 for categories
+    $('#categories').select2({
+        placeholder: "Pick value",   // Placeholder text for categories
+        allowClear: true,           // Option to clear selection
+        tags: true,                 // Enable tagging
+        width: '100%'               // Ensure it fits the container
+    });
+
+    // Initialize Select2 for events attended
+    $('#events_attended').select2({
+        placeholder: "Select events",
+        allowClear: true,
+        tags: true,
+        width: '100%'
+    });
+});
+</script>
+
 </body>
 
 </html>

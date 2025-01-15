@@ -12,6 +12,13 @@ if (!isset($_SESSION['id'])) {
 }
 
 require_once "db.php"; // Include the database connection file
+require_once "mergeGroups.php"; // Include the function file
+
+// Get the total number of groups to merge
+$totalGroupsToMerge = getGroupsToMerge($conn);
+
+// Store the result in session
+$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
 
 // Function to fetch Categories and their total number of attendees from the database
 function fetchCategoriesWithAttendees($conn)
@@ -195,7 +202,10 @@ $categories = fetchCategoriesWithAttendees($conn);
         echo "<tr>";
         echo "<td>";
         // Make the category name a hyperlink
-        echo "<a href='subscribers.php?category_id=$categoryId' class='category-name' data-category-id='$categoryId'>$categoryName</a>";
+        echo '<a href="subscribers.php?category_id=' . $categoryId . '" class="category-name" data-category-id="' . $categoryId . '" style="text-decoration: underline; color: inherit;" 
+    onmouseover="this.style.textDecoration=\'none\'; this.style.color=\'inherit\';" 
+    onmouseout="this.style.textDecoration=\'underline\'; this.style.color=\'inherit\';">' . $categoryName . '</a>';
+
         echo "</td>";
         echo "<td>";
         // Display attendees count without a hyperlink

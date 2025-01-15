@@ -172,7 +172,9 @@ $conn->close();
                                 <?php foreach ($numbers as $number) : ?>
                                     <li>
                                         <?php if ($categoryName === "Invalid Numbers" && is_array($number)): ?>
-                                            <a href="edit_subscriber.php?id=<?php echo urlencode($number['subscriber_id']); ?>">
+                                            <a href="edit_subscriber.php?id=<?php echo urlencode($number['subscriber_id']); ?> "style="text-decoration: underline; color: inherit;" 
+   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
                                                 <?php echo htmlspecialchars($number['phone_number']); ?>
                                             </a>
                                         <?php else: ?>

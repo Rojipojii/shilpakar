@@ -56,31 +56,27 @@ function generateVCF($conn, $subscriberID, $uniquePhoneNumbers, $uniqueEmails) {
             $vcfContent .= "EMAIL:" . $email . $eol;
         }
 
-        // Fetch and include multiple organizations if they exist
-        $orgSql = "SELECT organization FROM organizations WHERE subscriber_id = ?";
-        $orgStmt = $conn->prepare($orgSql);
-        $orgStmt->bind_param("i", $subscriberID);
-        $orgStmt->execute();
-        $orgResult = $orgStmt->get_result();
+        // Fetch and include multiple designations and organizations from designation_organization table
+$desigOrgSql = "SELECT designation, organization FROM designation_organization WHERE subscriber_id = ?";
+$desigOrgStmt = $conn->prepare($desigOrgSql);
+$desigOrgStmt->bind_param("i", $subscriberID);
+$desigOrgStmt->execute();
+$desigOrgResult = $desigOrgStmt->get_result();
 
-        if ($orgResult->num_rows > 0) {
-            while ($orgRow = $orgResult->fetch_assoc()) {
-                $vcfContent .= "ORG:" . $orgRow['organization'] . $eol;
-            }
+if ($desigOrgResult->num_rows > 0) {
+    while ($row = $desigOrgResult->fetch_assoc()) {
+        // Include designation if it exists
+        if (!empty($row['designation'])) {
+            $vcfContent .= "TITLE:" . $row['designation'] . $eol;
         }
 
-        // Fetch and include multiple designations if they exist
-        $desigSql = "SELECT designation FROM designations WHERE subscriber_id = ?";
-        $desigStmt = $conn->prepare($desigSql);
-        $desigStmt->bind_param("i", $subscriberID);
-        $desigStmt->execute();
-        $desigResult = $desigStmt->get_result();
-
-        if ($desigResult->num_rows > 0) {
-            while ($desigRow = $desigResult->fetch_assoc()) {
-                $vcfContent .= "TITLE:" . $desigRow['designation'] . $eol;
-            }
+        // Include organization if it exists
+        if (!empty($row['organization'])) {
+            $vcfContent .= "ORG:" . $row['organization'] . $eol;
         }
+    }
+}
+
 
         // Include address if it exists
         if (!empty($subscriber['address'])) {
@@ -368,7 +364,7 @@ $result = $stmt->get_result();
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <!-- Link to Bootstrap Icons CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@latest/font/bootstrap-icons.css">
-      <!-- DataTables -->
+
   <link rel="stylesheet" href="plugins/datatables-bs4/css/dataTables.bootstrap4.min.css">
   <link rel="stylesheet" href="plugins/datatables-responsive/css/responsive.bootstrap4.min.css">
   <link rel="stylesheet" href="plugins/datatables-buttons/css/buttons.bootstrap4.min.css">
@@ -381,6 +377,17 @@ $result = $stmt->get_result();
         color: red;
         font-size: 14px;
     }
+
+    .error-box {
+  border: 2px solid green;        /* Green border */
+  background-color: #d4edda;      /* Light green background */
+  color: black;                   /* Black text color */
+  padding: 15px;                  /* Space inside the box */
+  margin: 10px 0;                 /* Space above and below the box */
+  border-radius: 5px;             /* Rounded corners */
+  font-size: 16px;                /* Text size */
+  font-weight: bold;              /* Bold text */
+}   
     </style>
 </head>
 <body >
@@ -466,11 +473,15 @@ foreach ($matchingContacts as $match) {
 // Ensure the list of matched subscribers is unique
 $matchedSubscribers = array_unique($matchedSubscribers);
 ?>
+<div id="error-message" class="error-box" style="display: none;"></div>
+
+
                 <!-- Table to display data or search results -->
                 <table id="example1" class="table table-bordered table-striped">
                 <thead>
         <tr>
             <!-- <th>Serial Number</th> -->
+            <th>Select</th>
             <th>Name</th>
             <th>Phone</th>
             <th>Email</th>
@@ -488,7 +499,13 @@ if ($result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
 
         // Add JavaScript to scroll to the edited row
-        echo "<script>document.getElementById('row_" . $row["subscriber_id"] . "').scrollIntoView();</script>";
+        echo "<script>document.getElementById('row_" . $row["subscriber_id"] . "');</script>";
+          
+        // Select box for merge
+        echo '<td style="text-align: center; vertical-align: top;">
+        <input class="form-check-input subscriber-checkbox" type="checkbox" value="' . htmlspecialchars($row["subscriber_id"]) . '">
+      </td>';
+
 
         // Display full name
         echo "<td>" . ($row["full_name"] ? $row["full_name"] : '') . "</td>";
@@ -669,24 +686,103 @@ if (in_array($row["subscriber_id"], $matchedSubscribers)) {
 <script src="plugins/datatables-buttons/js/buttons.colVis.min.js"></script>
 <!-- Page specific script -->
 <script>
-  $(function () {
-    $("#example1").DataTable({
-      "responsive": true, "lengthChange": false, "autoWidth": false,
-      "buttons": ["copy", "csv", "excel", "pdf", "print", "colvis"]
-    }).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
-    $('#example2').DataTable({
-      "paging": true,
-      "lengthChange": false,
-      "searching": false,
-      "ordering": true,
-      "info": true,
-      "autoWidth": false,
-      "responsive": true,
+$(function () {
+  // Initialize the DataTable for example1
+  $("#example1").DataTable({
+    "responsive": true,
+    "lengthChange": false,
+    "autoWidth": false,
+    "buttons": [
+      "copy", "csv", "excel", "pdf", "print", "colvis",
+      {
+        text: 'Merge',  // Custom button text
+        action: function (e, dt, node, config) {
+          // Collect selected checkboxes
+          var selectedIds = [];
+          $(".subscriber-checkbox:checked").each(function () {
+            selectedIds.push($(this).val());
+          });
+
+          // Check if no checkboxes are selected
+if (selectedIds.length === 0) {
+  // Get the error message div
+  const errorDiv = document.getElementById('error-message');
+  
+  // Set the error message
+  errorDiv.textContent = "Please select subscribers you want to merge.";
+  
+  // Show the error message div
+  errorDiv.style.display = 'block';
+  
+  // Optionally, you can hide the error message after some time
+  setTimeout(() => {
+    errorDiv.style.display = 'none';
+  }, 3000); // Hide after 3 seconds
+  return;
+}
+
+          // Sort subscriber IDs in ascending order
+          selectedIds.sort(function(a, b) {
+            return a - b;
+          });
+
+          // The first (smallest) subscriber ID to keep
+          var firstSubscriberId = selectedIds[0];
+
+          // Send AJAX request to merge the subscribers
+          $.ajax({
+            url: 'merge_subscribers.php', // Your PHP file for handling the merge
+            type: 'POST',
+            data: {
+              subscriber_ids: selectedIds,
+              first_subscriber_id: firstSubscriberId
+            },
+            success: function(response) {
+              // If merge is successful, redirect to the edit page
+              window.location.href = 'edit_subscriber.php?id=' + firstSubscriberId;
+            },
+            error: function(xhr, status, error) {
+              alert("An error occurred: " + error);
+            }
+          });
+        },
+        className: 'btn-merge',
+    init: function (dt, node, config) {
+        $(node).css({
+            'background-color': '#62828a',
+            'color': '#fff',
+            'border': 'none',
+            'padding': '8px 12px',
+            'border-radius': '4px',
+            'cursor': 'pointer'
+        });
+    }
+      }
+    ],
+    "initComplete": function () {
+      // Ensure the button container stays at the top while scrolling
+      var buttonsContainer = $('#example1_wrapper .col-md-6:eq(0)');
+      buttonsContainer.css('position', 'sticky');
+      buttonsContainer.css('top', '0');
+      buttonsContainer.css('z-index', '1000');
+    },
+    "fixedHeader": true // Enable the fixedHeader feature
+  }).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
+
+  // Initialize the DataTable for example2
+  $(document).ready(function () {
+        $('#example2').DataTable({
+            "paging": true,
+            "lengthChange": false,
+            "searching": false,
+            "ordering": true,
+            "info": true,
+            "autoWidth": false,
+            "responsive": true,
+        });
     });
-  });
+});
 </script>
-
-
         
 </body>
 </html>

@@ -1,310 +1,339 @@
-<?php
+<?php 
 // Start the session
 session_start();
 
 // Check if a user is logged in
 if (!isset($_SESSION['id'])) {
-    // If the user is not logged in, redirect to the login page with a message
     header("Location: index.php?message=You should login first");
-    echo "<script>alert('You should login first');</script>";
     exit();
 }
 
 require_once "db.php"; // Include the database connection file
 
-// Get the primary subscriber ID to keep from URL
-$primary_subscriber_id = isset($_GET['subscriber_id']) ? $_GET['subscriber_id'] : null;
+// Get subscriber_id from URL
+$subscriberIdFilter = isset($_GET['subscriber_id']) ? $_GET['subscriber_id'] : null;
 
-function fetchMatchingContacts($conn, $primary_subscriber_id = null) {
-    $sql = "
-        SELECT DISTINCT
-            s1.subscriber_id AS subscriber1_id, 
-            s2.subscriber_id AS subscriber2_id,
-            s1.full_name, 
-            pn.phone_number AS phone_number,
-            e.email AS email,
-            do.designation AS designation,
-            do.organization AS organization
-        FROM subscribers s1
-        LEFT JOIN phone_numbers pn ON s1.subscriber_id = pn.subscriber_id
-        LEFT JOIN emails e ON s1.subscriber_id = e.subscriber_id
-        LEFT JOIN designation_organization do ON s1.subscriber_id = do.subscriber_id
-        JOIN subscribers s2 ON (s1.subscriber_id != s2.subscriber_id)
-        LEFT JOIN phone_numbers pn2 ON s2.subscriber_id = pn2.subscriber_id
-        LEFT JOIN emails e2 ON s2.subscriber_id = e2.subscriber_id
-        WHERE (pn.phone_number = pn2.phone_number OR e.email = e2.email)
-    ";
+$query = "
+    SELECT
+        s.subscriber_id,
+        s.full_name,
+        p.phone_number,
+        e.email,
+        d.designation,
+        d.organization
+    FROM
+        subscribers s
+    LEFT JOIN phone_numbers p ON s.subscriber_id = p.subscriber_id
+    LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
+    LEFT JOIN designation_organization d ON s.subscriber_id = d.subscriber_id
+";
 
-    // If a primary subscriber ID is provided, filter results by the subscriber_id
-    if ($primary_subscriber_id !== null) {
-        $sql .= " AND (s1.subscriber_id = ? OR s2.subscriber_id = ?)";
+$stmt = $conn->prepare($query);
+$stmt->execute();
+$result = $stmt->get_result();
+
+$groups = [];
+
+// Fetch all rows and group by overlapping phone numbers or emails
+while ($row = $result->fetch_assoc()) {
+    $subscriberId = $row['subscriber_id'];
+    $fullName = $row['full_name'];
+    $designation = $row['designation'];
+    $organization = $row['organization'];
+    $phone = $row['phone_number'];
+    $email = $row['email'];
+    $matched = false;
+
+    foreach ($groups as &$group) {
+        if (
+            ($phone && in_array($phone, $group['phone_numbers'])) ||
+            ($email && in_array($email, $group['emails']))
+        ) {
+            // Merge subscriber into the group
+            if (!isset($group['subscribers'][$subscriberId])) {
+                $group['subscribers'][$subscriberId] = [
+                    'full_name' => $fullName,
+                    'designation' => [],
+                    'organization' => [],
+                    'phone_numbers' => [],
+                    'emails' => [],
+                ];
+            }
+            if ($phone) {
+                $group['subscribers'][$subscriberId]['phone_numbers'][] = $phone;
+                $group['phone_numbers'][] = $phone;
+            }
+            if ($email) {
+                $group['subscribers'][$subscriberId]['emails'][] = $email;
+                $group['emails'][] = $email;
+            }
+            if ($designation && !in_array($designation, $group['subscribers'][$subscriberId]['designation'])) {
+                $group['subscribers'][$subscriberId]['designation'][] = $designation;
+            }
+            if ($organization && !in_array($organization, $group['subscribers'][$subscriberId]['organization'])) {
+                $group['subscribers'][$subscriberId]['organization'][] = $organization;
+            }
+            $matched = true;
+            break;
+        }
     }
 
-    $stmt = $conn->prepare($sql);
-
-    if ($primary_subscriber_id !== null) {
-        $stmt->bind_param("ii", $primary_subscriber_id, $primary_subscriber_id);
+    // If no match is found, create a new group
+    if (!$matched) {
+        $groups[] = [
+            'subscribers' => [
+                $subscriberId => [
+                    'full_name' => $fullName,
+                    'designation' => $designation ? [$designation] : [],
+                    'organization' => $organization ? [$organization] : [],
+                    'phone_numbers' => $phone ? [$phone] : [],
+                    'emails' => $email ? [$email] : [],
+                ],
+            ],
+            'phone_numbers' => $phone ? [$phone] : [],
+            'emails' => $email ? [$email] : [],
+        ];
     }
-
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $matches = [];
-
-    while ($row = $result->fetch_assoc()) {
-        // Group matches by phone_number or email
-        $key = $row['phone_number'] ?: $row['email'];
-        $matches[$key][] = $row;
-    }
-
-    return ['matches' => $matches, 'group_count' => count($matches)];
 }
 
+    $groups = array_filter($groups, function ($group) {
+        return count($group['subscribers']) > 1;
+    });
 
-// Get the result from the fetchMatchingContacts function
-$result = fetchMatchingContacts($conn, $primary_subscriber_id);
+    // Function to find the group containing the given subscriber_id
+function findGroupForSubscriber($subscriberId, $groups) {
+    foreach ($groups as $group) {
+        if (isset($group['subscribers'][$subscriberId])) {
+            return $group;
+        }
+    }
+    return null; // No group found for this subscriber
+}
 
-// Extract the matches and group count
-$subscribers = $result['matches'];
-$group_count = $result['group_count'];
-
-
-// Initialize error message variables
-$error_message = "";
-$clicked_group = isset($_POST['merge']) ? $_POST['merge'] : null;
-
-// Handle the form submission
-if (isset($_POST['merge'])) {
-    $group_index = $_POST['merge']; // Get the group index
-
-    // Check if at least one checkbox is selected
-    if (isset($_POST['merge_ids']) && is_array($_POST['merge_ids']) && count($_POST['merge_ids']) > 0) {
-        // Continue with the merging process
+    if($subscriberIdFilter){
+        // Find and display the group for the specified subscriber_id
+    $groupForSubscriberId = findGroupForSubscriber($subscriberIdFilter, $groups);
+    // Assign the group to display
+    $groupsToDisplay = [$groupForSubscriberId];
+    if ($groupForSubscriberId) {
+        // echo "<pre>";
+        // print_r($groupForSubscriberId); // Display the final group for the subscriber
+        // echo "</pre>";
+        
     } else {
-        // Set error message for the specific group
-        $error_message[$group_index] = "Please select Subscribers to merge.";
+        echo "<p>No group found for Subscriber ID: " . htmlspecialchars($subscriberIdFilter) . "</p>";
     }
+
+    }else{
+
+    // Count the total number of groups that need to be merged
+    $totalGroupsToMerge = count($groups);
+
+    // Pagination logic
+    $groupsPerPage = 5; // Number of groups per page
+    $totalGroups = count($groups); // Total number of groups
+    $totalPages = ceil($totalGroups / $groupsPerPage); // Total number of pages
+
+    // Get the current page number
+    $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $currentPage = max(1, min($currentPage, $totalPages)); // Ensure page is within range
+
+    // Calculate the start and end index for the groups to display
+    $startIndex = ($currentPage - 1) * $groupsPerPage;
+
+    // Apply pagination
+    $groupsToDisplay = array_slice($groups, $startIndex, $groupsPerPage);
 }
 
 
-// Handle the form submission
-if (isset($_POST['merge'])) {
-    // Check if at least one checkbox is selected
-    if (isset($_POST['merge_ids']) && is_array($_POST['merge_ids']) && count($_POST['merge_ids']) > 0) {
-        $merge_ids = $_POST['merge_ids'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['merge'])) {
+        $mergeIds = $_POST['merge']; // Array of selected subscriber IDs
 
-        // Sort the merge IDs to ensure the first ID is considered the primary subscriber ID
-        sort($merge_ids);
+        // Get the first subscriber ID in the group
+        $firstSubscriberId = $mergeIds[0];
 
-        // The first ID in the sorted list will be the primary subscriber ID
-        $primary_subscriber_id = $merge_ids[0];
+        // Start a transaction to ensure all actions are done atomically
+        $conn->begin_transaction();
 
-        // Ensure the primary subscriber is not deleted or merged with itself
-        if (in_array($primary_subscriber_id, $merge_ids)) {
-            $key = array_search($primary_subscriber_id, $merge_ids);
-            unset($merge_ids[$key]);
-        }
-
-        // Perform the merge logic using both the primary and merged IDs
-        $tablesToUpdate = ['phone_numbers', 'emails', 'event_subscriber_mapping'];
-        
-        foreach ($tablesToUpdate as $table) {
-            if (!empty($merge_ids)) {
-                $placeholders = implode(",", array_fill(0, count($merge_ids), "?"));
-                $sql = "UPDATE $table SET subscriber_id = ? WHERE subscriber_id IN ($placeholders)";
-                $stmt = $conn->prepare($sql);
-                $types = str_repeat("i", count($merge_ids) + 1);
-                $params = array_merge([$primary_subscriber_id], $merge_ids);
-                $stmt->bind_param($types, ...$params);
-                $stmt->execute();
-            }            
-        }
-
-        // Merging designations and organizations
-        // First, get all the designations and organizations for the merged subscribers
-        $merge_ids_imploded = implode(",", $merge_ids);
-        $sql = "SELECT subscriber_id, designation, organization FROM designation_organization WHERE subscriber_id IN ($merge_ids_imploded)";
-        $result = $conn->query($sql);
-        
-        $designations = [];
-        $organizations = [];
-        
-        while ($row = $result->fetch_assoc()) {
-            // Store designations and organizations
-            $designations[] = $row['designation'];
-            $organizations[] = $row['organization'];
-        }
-        
-        // Merge designations and organizations - for simplicity, we assume we take the first value from the list.
-        // You could enhance this logic depending on your requirements (e.g., concatenating or choosing based on priority).
-        $merged_designation = !empty($designations) ? $designations[0] : null;
-        $merged_organization = !empty($organizations) ? $organizations[0] : null;
-
-        // Update the primary subscriber's designation and organization
-        if ($merged_designation && $merged_organization) {
-            $sql = "UPDATE designation_organization SET designation = ?, organization = ? WHERE subscriber_id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssi", $merged_designation, $merged_organization, $primary_subscriber_id);
+        try {
+            // Step 1: Delete all subscribers except the first subscriber_id of the matched group
+            // Remove subscriber_ids that are in the merge group but not the first subscriber
+            $deleteQuery = "DELETE FROM subscribers WHERE subscriber_id != ? AND subscriber_id IN (" . implode(",", $mergeIds) . ")";
+            $stmt = $conn->prepare($deleteQuery);
+            $stmt->bind_param("i", $firstSubscriberId);
             $stmt->execute();
-        }
 
-        // Delete the merged subscribers from the `designation_organization` table
-        if (!empty($merge_ids)) {
-            $merge_ids_imploded = implode(",", $merge_ids);
-            $sql = "DELETE FROM designation_organization WHERE subscriber_id IN ($merge_ids_imploded)";
-            if (!$conn->query($sql)) {
-                die('Error deleting merged designations/organizations: ' . $conn->error);
-            }
-        }
-        if (!empty($merge_ids)) {
-            $merge_ids_imploded = implode(",", $merge_ids);
-            $sql = "DELETE FROM subscribers WHERE subscriber_id IN ($merge_ids_imploded)";
-            if (!$conn->query($sql)) {
-                die('Error deleting merged subscribers: ' . $conn->error);
-            }
-        }
-        
+            // Step 2: Update emails, phone_numbers, designation_organization, and event_subscriber_mapping tables
+            // Update emails table
+            $updateEmailQuery = "UPDATE emails SET subscriber_id = ? WHERE subscriber_id != ? AND subscriber_id IN (" . implode(",", $mergeIds) . ")";
+            $stmt = $conn->prepare($updateEmailQuery);
+            $stmt->bind_param("ii", $firstSubscriberId, $firstSubscriberId);
+            $stmt->execute();
 
-        // Redirect to the edit_subscriber page of the primary subscriber
-        header("Location: edit_subscriber.php?id=$primary_subscriber_id&merge_success=1");
-        exit();
-    } else {
-        // Set error message if no checkboxes are selected
-        $error_message = "Please select Subscribers to merge.";
+            // Update phone_numbers table
+            $updatePhoneQuery = "UPDATE phone_numbers SET subscriber_id = ? WHERE subscriber_id != ? AND subscriber_id IN (" . implode(",", $mergeIds) . ")";
+            $stmt = $conn->prepare($updatePhoneQuery);
+            $stmt->bind_param("ii", $firstSubscriberId, $firstSubscriberId);
+            $stmt->execute();
+
+            // Update designation_organization table
+            $updateDesignationQuery = "UPDATE designation_organization SET subscriber_id = ? WHERE subscriber_id != ? AND subscriber_id IN (" . implode(",", $mergeIds) . ")";
+            $stmt = $conn->prepare($updateDesignationQuery);
+            $stmt->bind_param("ii", $firstSubscriberId, $firstSubscriberId);
+            $stmt->execute();
+
+            // Update event_subscriber_mapping table
+            $updateEventSubscriberMappingQuery = "UPDATE event_subscriber_mapping SET subscriber_id = ? WHERE subscriber_id != ? AND subscriber_id IN (" . implode(",", $mergeIds) . ")";
+            $stmt = $conn->prepare($updateEventSubscriberMappingQuery);
+            $stmt->bind_param("ii", $firstSubscriberId, $firstSubscriberId);
+            $stmt->execute();
+
+            // Commit the transaction
+            $conn->commit();
+
+            // Redirect to the edit_subscriber page for the first subscriber_id in the group
+            header("Location: edit_subscriber.php?id=" . $firstSubscriberId);
+            exit(); // Ensure no further code is executed after redirection
+        } catch (Exception $e) {
+            // If there is an error, roll back the transaction
+            $conn->rollback();
+            echo "Error: " . $e->getMessage();
+        }
     }
 }
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Merge Subscribers</title>
-    <style>
-.table-container {
-    margin-left: 20px; /* Adds a small space on the left side */
-    margin-bottom: 30px; /* Space between groups */
-    max-width: 80%; /* Adjusts the width of the container */
-    text-align: left; /* Aligns text to the left */
-}
-
-table {
-    width: 100%; /* Full width within the container */
-    border-collapse: collapse;
-}
-
-th, td {
-    padding: 10px;
-    border: 1px solid #ddd;
-    text-align: left; /* Aligns content to the left in cells */
-}
-
-th {
-    background-color: #f2f2f2;
-}
-
-.merge-button {
-    margin-top: 10px;
-    padding: 5px 10px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-.merge-button:hover {
-    background-color: #45a049;
-}
-
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicate Records</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-<?php include("header.php"); ?>
-<!-- Content Wrapper. Contains page content -->
+
+
+   
+<?php 
+// // Calculate the total number of groups to merge
+// $totalGroupsToMerge = count($groups);
+
+include("header.php"); ?>
 <div class="content-wrapper">
     <div class="container-fluid">
-    <h1>Merge Subscribers (<?php echo $group_count; ?> groups to merge)</h1>
+        <div class="container mt-5">
+        <h3 class="text-center mb-4">
+                Merge & Fix
+                <?php if ($subscriberIdFilter): ?>
+                    <!-- (Displaying Group for Subscriber ID: <?= $subscriberIdFilter ?>) -->
+                <?php else: ?>
+                    (<?= $totalGroupsToMerge ?> Groups to Merge)
+                <?php endif; ?>
+            </h3>
+            <?php if (!empty($groupsToDisplay)): ?>
+                <?php foreach ($groupsToDisplay as $index => $group): ?>
+                    <form action="merge.php" method="POST" class="mb-5 merge-form">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Select</th>
+                                        <th>Full Name</th>
+                                        <th>Phone Numbers</th>
+                                        <th>Emails</th>
+                                        <th>Designation</th>
+                                        <th>Organization</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($group['subscribers'] as $subscriberId => $details): ?>
+                                        <tr>
+                                        <td style="text-align: center; vertical-align: top;">
+  <input class="form-check-input" type="checkbox" name="merge[]" value="<?= $subscriberId ?>">
+</td>
 
-<form action="merge.php" method="post">
-    <input type="hidden" name="primary_subscriber_id" value="<?php echo $primary_subscriber_id; ?>">
+                                        <td>    
+                                            <a href="edit_subscriber.php?id=<?= $subscriberId ?>" 
+   style="text-decoration: underline; color: inherit;" 
+   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
+    <?= $details['full_name'] ?>
+</a>
+                                            </td>
+                                            <td><?= implode(', ', $details['phone_numbers']) ?></td>
+                                            <td><?= implode(', ', $details['emails']) ?></td>
+                                            <td><?= implode(', ', $details['designation']) ?></td>
+                                            <td><?= implode(', ', $details['organization']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Hidden input to identify the group -->
+                        <input type="hidden" name="group_id" value="<?= $startIndex + $index + 1 ?>">
+                        <div class="d-flex justify-content-center mt-3">
+                            <button type="submit" class="btn btn-outline-success">Merge Group</button>
+                        </div>
+                        <!-- Error message -->
+                        <p class="text-danger text-center mt-2 error-message" style="display: none;">
+        Please select the checkbox.
+    </p>
+                    </form>
+                <?php endforeach; ?>
 
-    <?php if ($primary_subscriber_id === null): ?>
-        <?php foreach ($subscribers as $key => $group): ?>
-            <div class="table-container">
-                <table>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Phone Number</th>
-                        <th>Organization</th>
-                        <th>Designation</th>
-                    </tr>
-                    <?php foreach ($group as $subscriber): ?>
-                        <tr>
-                            <td>
-                                <label>
-                                    <input type="checkbox" name="merge_ids[]" value="<?php echo $subscriber['subscriber1_id']; ?>" 
-                                    <?php echo $subscriber['subscriber1_id'] == $primary_subscriber_id ? 'checked disabled' : ''; ?>>
-                                    <?php echo $subscriber['full_name']; ?>
-                                </label>
-                            </td>
-                            <td><?php echo $subscriber['email']; ?></td>
-                            <td><?php echo $subscriber['phone_number']; ?></td>
-                            <td><?php echo $subscriber['organization']; ?></td>
-                            <td><?php echo $subscriber['designation']; ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </table>
-                <?php if (isset($error_message[$key])): ?>
-            <div class="alert alert-info" style="color: red; font-size: 14px;">
-                <?php echo htmlspecialchars($error_message[$key]); ?>
-            </div>
+                <!-- Pagination controls -->
+                <?php if (!$subscriberIdFilter): ?>
+    <div class="pagination justify-content-center">
+        <?php if ($currentPage > 1): ?>
+            <a class="btn btn-secondary" href="?page=<?= $currentPage - 1 ?>">Previous</a>
         <?php endif; ?>
-                <button type="submit" name="merge" class="merge-button" value="<?php echo $key; ?>">Merge this group</button>
-
-
-            </div>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <?php foreach ($subscribers as $key => $group): ?>
-            <div class="table-container">
-                <table>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Phone Number</th>
-                        <th>Organization</th>
-                        <th>Designation</th>
-                    </tr>
-                    <?php foreach ($group as $subscriber): ?>
-                        <?php if ($subscriber['subscriber1_id'] == $primary_subscriber_id || $subscriber['subscriber2_id'] == $primary_subscriber_id): ?>
-                            <tr>
-                                <td>
-                                    <label>
-                                        <input type="checkbox" name="merge_ids[]" value="<?php echo $subscriber['subscriber1_id']; ?>" 
-                                        <?php echo $subscriber['subscriber1_id'] == $primary_subscriber_id ? 'checked disabled' : ''; ?>>
-                                        <?php echo $subscriber['full_name']; ?>
-                                    </label>
-                                </td>
-                                <td><?php echo $subscriber['email']; ?></td>
-                                <td><?php echo $subscriber['phone_number']; ?></td>
-                                <td><?php echo $subscriber['organization']; ?></td>
-                                <td><?php echo $subscriber['designation']; ?></td>
-                            </tr>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </table>
-                <?php if (isset($error_message[$key])): ?>
-            <div class="alert alert-info" style="color: red; font-size: 14px;">
-                <?php echo htmlspecialchars($error_message[$key]); ?>
-            </div>
+        <?php for ($page = 1; $page <= $totalPages; $page++): ?>
+            <a class="btn btn-secondary <?= $page == $currentPage ? 'active' : '' ?>" href="?page=<?= $page ?>"><?= $page ?></a>
+        <?php endfor; ?>
+        <?php if ($currentPage < $totalPages): ?>
+            <a class="btn btn-secondary" href="?page=<?= $currentPage + 1 ?>">Next</a>
         <?php endif; ?>
-                <button type="submit" name="merge" class="merge-button" value="<?php echo $key; ?>">Merge this group</button>
-            </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
-</form>
+    </div>
+<?php endif; ?>
 
+
+            <?php else: ?>
+                <p class="text-center">No duplicate records found.</p>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
+
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+    // Select all forms with the 'merge-form' class
+    document.querySelectorAll('.merge-form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            // Get all checkboxes in the current form
+            const checkboxes = form.querySelectorAll('input[name="merge[]"]');
+            const errorMessage = form.querySelector('.error-message');
+
+            // Check if any checkbox is selected
+            const isChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+
+            if (!isChecked) {
+                e.preventDefault(); // Prevent form submission
+                errorMessage.style.display = 'block'; // Show error message
+            } else {
+                errorMessage.style.display = 'none'; // Hide error message
+            }
+        });
+    });
+});
+</script>
+
+
 </body>
 </html>
+

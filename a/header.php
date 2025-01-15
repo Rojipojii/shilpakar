@@ -1,3 +1,13 @@
+<?php
+// session_start(); // Start the session at the beginning of the page
+
+if (isset($_SESSION['totalGroupsToMerge'])) {
+    $totalGroupsToMerge = $_SESSION['totalGroupsToMerge'];
+    // Use $totalGroupsToMerge as needed
+}
+
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,7 +101,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="subscribers.php" class="nav-link">
+                    <a href="list" class="nav-link">
                         <i class="bi bi-person-fill"></i>
                         <p>Subscriber's List</p>
                     </a>
@@ -132,12 +142,17 @@
                         <p>Create Mailing-List</p>
                     </a>
                 </li>
+
                 <li class="nav-item">
-                    <a href="merge" class="nav-link">
-                        <i class="bi bi-intersect"></i>
-                        <p>Merge</p>
-                    </a>
-                </li>
+    <a href="merge" class="nav-link">
+        <i class="bi bi-intersect"></i>      
+        <p>Merge & Fix</p>
+        <?php if (isset($totalGroupsToMerge) && $totalGroupsToMerge > 0): ?>
+            <span>(<?= $totalGroupsToMerge ?>)</span>
+        <?php endif; ?>
+    </a>
+</li>
+
             </ul>
             
       </nav>

@@ -12,6 +12,13 @@ if (!isset($_SESSION['id'])) {
 }
 
 require_once "db.php"; // Include the database connection file
+require_once "mergeGroups.php"; // Include the function file
+
+// Get the total number of groups to merge
+$totalGroupsToMerge = getGroupsToMerge($conn);
+
+// Store the result in session
+$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
 
 // Function to fetch total number of people from all data
 function getTotalPeopleFromAllData($conn) {
@@ -261,7 +268,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
                 <div class="icon"> <!-- Adjust the font-size as needed -->
                 <i class="bi bi-person-fill"></i>
                 </div>
-                <a href="subscribers.php" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+                <a href="list" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
             </div>
         </div>
 
@@ -276,7 +283,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
         <div class="icon">
         <i class="bi bi-calendar-event"></i>
         </div>
-        <a href="addevent.php" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+        <a href="events" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
     </div>
 </div>
 
@@ -290,7 +297,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
         <div class="icon">
             <i class="bi bi-person-plus-fill"></i>
         </div>
-        <a href="subscribers.php?filter=repeated" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+        <a href="list?filter=repeated" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
     </div>
 </div>
 
@@ -326,27 +333,33 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
         if (!empty($category)) {
             $totalPeopleByCategory = getTotalPeopleByCategory($conn, $category);
             // Output the total count and create a link to the subscribers page with the selected category filter
-            echo "<a href='subscribers.php?category_id=$category'>$totalPeopleByCategory</a>";
+            echo "<a href='list?category_id=$category'>$totalPeopleByCategory</a>";
 
         }
         ?>
         <div class="input-group">
-            <select name="category" id="category" class="form-select">
-                <!-- Option for "All" categories -->
-                <!-- <option value="all" <?php if ($category === "all") echo "selected"; ?>></option> -->
-                <?php
-                // Loop through the category list and display the categories in the select dropdown
-                foreach ($categoryList as $cat) {
-                    echo "<option value='" . $cat["category_id"] . "'";
-                    if ($category == $cat["category_id"]) {
-                        echo " selected";
-                    }
-                    echo ">" . $cat["category_name"] . "</option>";
-                }
-                ?>
-            </select>
-            <button type="submit" class="btn btn-outline-success">Filter</button>
-        </div>
+    <select name="category" id="category" class="form-select">
+        <!-- Option for "All" categories -->
+        <!-- <option value="all" <?php if ($category === "all") echo "selected"; ?>></option> -->
+        <?php
+        // Sort the category list by category_name in alphabetical order
+        usort($categoryList, function($a, $b) {
+            return strcmp($a["category_name"], $b["category_name"]);
+        });
+
+        // Loop through the sorted category list and display the categories in the select dropdown
+        foreach ($categoryList as $cat) {
+            echo "<option value='" . $cat["category_id"] . "'";
+            if ($category == $cat["category_id"]) {
+                echo " selected";
+            }
+            echo ">" . $cat["category_name"] . "</option>";
+        }
+        ?>
+    </select>
+    <button type="submit" class="btn btn-outline-success">Filter</button>
+</div>
+
     </form>
 </li>
 
@@ -359,24 +372,32 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
                 if (!empty($organizer)) {
                     $totalPeopleByOrganizer = getTotalPeopleByOrganizer($conn, $organizer);
                     // Output the total count and create a link to the subscribers page with the selected organizer filter
-                    echo "<a href='subscribers.php?organizer_id=$organizer'>$totalPeopleByOrganizer</a>";
+                    echo "<a href='list?organizer_id=$organizer'>$totalPeopleByOrganizer</a>";
                 }
                 ?>
                 <div class="input-group">
-                    <select name="organizer" id="organizer" class="form-select">
-                        <!-- <option value="all" <?php if ($organizer === "all") echo "selected"; ?>>All</option> -->
-                        <?php
-                        foreach ($organizerList as $org) {
-                            echo "<option value='" . $org["organizer_id"] . "'";
-                            if ($organizer == $org["organizer_id"]) {
-                                echo " selected";
-                            }
-                            echo ">" . $org["organizer_name"] . "</option>";
-                        }
-                        ?>
-                    </select>
-                    <button type="submit" class="btn btn-outline-success">Filter</button>
-                </div>
+    <select name="organizer" id="organizer" class="form-select">
+        <!-- Option for "All" organizers -->
+        <!-- <option value="all" <?php if ($organizer === "all") echo "selected"; ?>>All</option> -->
+        <?php
+        // Sort the organizer list by organizer_name in alphabetical order
+        usort($organizerList, function($a, $b) {
+            return strcmp($a["organizer_name"], $b["organizer_name"]);
+        });
+
+        // Loop through the sorted organizer list and display the organizers in the select dropdown
+        foreach ($organizerList as $org) {
+            echo "<option value='" . $org["organizer_id"] . "'";
+            if ($organizer == $org["organizer_id"]) {
+                echo " selected";
+            }
+            echo ">" . $org["organizer_name"] . "</option>";
+        }
+        ?>
+    </select>
+    <button type="submit" class="btn btn-outline-success">Filter</button>
+</div>
+
 
             </form>
         </li>
@@ -425,7 +446,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
             //    $encodedEventName = urlencode($event_name);
 
                 // Construct the URL with the event name as a parameter
-                $eventUrl = 'subscribers.php?event_id=' . $event_id ;
+                $eventUrl = 'list?event_id=' . $event_id ;
 
                 echo '<li>';
                 echo '<a class="users-list-name" href="' . $eventUrl . '">' . $rowLatestEvent["event_name"] . '</a>';
@@ -441,7 +462,7 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
         </ul>
     </div>
     <div class="card-footer text-center">
-        <a href="addevent.php">View All Events</a>
+        <a href="events">View All Events</a>
     </div>
 </div>
 
@@ -498,7 +519,7 @@ LIMIT 10
             </ul>
         </div>
         <div class="card-footer text-center">
-            <a href="subscribers.php">View All Attendees</a>
+            <a href="list">View All Attendees</a>
         </div>
     </div>
 </div>
