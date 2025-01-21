@@ -119,6 +119,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["editOrganizer"])) {
 
 // Fetch organizers with total attendees from the database
 $organizers = fetchOrganizersWithAttendees($conn);
+$totalOrganizers = count($organizers);
 ?>
 
 <!DOCTYPE html>
@@ -161,7 +162,7 @@ $organizers = fetchOrganizersWithAttendees($conn);
                             <button type="submit" name="addOrganizer" class="btn btn-outline-success">Add Organizer</button>
                         </form>
                         <!-- Display existing organizers with total attendees -->
-                        <h2 class="mt-4">Organizers:</h2>
+                        <h2 class="mt-4">Organizers: <?php echo $totalOrganizers; ?></h2>
                         <table class="table">
                             <thead>
                                 <tr>

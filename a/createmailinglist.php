@@ -109,35 +109,29 @@ function getEmailsByCategoryOrganizerWithLimit($conn, $category, $organizer, $of
             FROM emails e
             INNER JOIN event_subscriber_mapping esm ON e.subscriber_id = esm.subscriber_id
             INNER JOIN subscribers s ON e.subscriber_id = s.subscriber_id
-            WHERE ";
+            WHERE e.hidden = 0 ";
 
     // Check if any categories are selected
-    if (empty($category) || in_array("all", $category)) {
-        // When "All" or no category is selected, select all emails
-        $sql .= "1"; // This condition is always true
-    } else {
-        foreach ($category as $categoryId) {
-            $categoryIds[] = $categoryId;
-            $categoryPlaceholders[] = '?';
-        }
-        $sql .= "esm.category_id IN (" . implode(',', $categoryPlaceholders) . ")";
+if (!empty($category) && !in_array("all", $category)) {
+    $categoryPlaceholders = array();
+    foreach ($category as $categoryId) {
+        $categoryIds[] = $categoryId;
+        $categoryPlaceholders[] = '?';
     }
+    $sql .= " AND esm.category_id IN (" . implode(',', $categoryPlaceholders) . ")";
+}
 
-    // Check if any organizers are selected
-    if (!empty($organizer) && !in_array("all", $organizer)) {
-        $organizerIds = array();
-        $organizerPlaceholders = array();
-
-        foreach ($organizer as $organizerId) {
-            $organizerIds[] = $organizerId;
-            $organizerPlaceholders[] = '?';
-        }
-
-        $sql .= " AND esm.organizer_id IN (" . implode(',', $organizerPlaceholders) . ")";
+// Check if any organizers are selected
+if (!empty($organizer) && !in_array("all", $organizer)) {
+    $organizerPlaceholders = array();
+    foreach ($organizer as $organizerId) {
+        $organizerIds[] = $organizerId;
+        $organizerPlaceholders[] = '?';
     }
+    $sql .= " AND esm.organizer_id IN (" . implode(',', $organizerPlaceholders) . ")";
+}
 
-    // Add ordering and limits
-    $sql .= " ORDER BY e.email LIMIT ?, ?";
+$sql .= " ORDER BY e.email LIMIT ?, ?";
 
     // Initialize an array to hold the parameters
     $params = $categoryIds;
@@ -269,6 +263,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["createListCategoryOrga
             <input type="submit" name="createListCategoryOrganizer" value="Create List" class="btn btn-outline-success">
         </div>
     </div>
+    
                 <h2>According to Category</h2>
                 <table class="table table-bordered">
                     <thead>

@@ -15,6 +15,7 @@ require_once "db.php";
 // Function to validate a mobile number
 function isValidMobileNumber($mobile_number) {
     // Check if the mobile number contains only numeric characters and is 10 digits long
+    $mobile_number = preg_replace('/\D/', '', trim($mobile_number)); // Remove spaces at the start and end
     return ctype_digit($mobile_number) && strlen($mobile_number) === 10;
 }
 
@@ -82,7 +83,10 @@ if ($result->num_rows > 0) {
                     break;
                 default:
                     if (!in_array($phone_number, $otherNumbers)) {
-                        $otherNumbers[] = $phone_number;
+                        $otherNumbers[] =[
+                'phone_number' => $phone_number,
+                'subscriber_id' => $subscriber_id ?: "Missing ID"
+                        ];
                     }
                     break;
             }
@@ -160,8 +164,18 @@ $conn->close();
                     "Invalid Numbers" => $invalidNumbers
                 ];
 
-                foreach ($categories as $categoryName => $numbers): ?>
+                foreach ($categories as $categoryName => $numbers): 
+                    // Sort the numbers in ascending order
+                    if (is_array($numbers)) {
+                        usort($numbers, function($a, $b) {
+                            $phoneA = is_array($a) ? $a['phone_number'] : $a;
+                            $phoneB = is_array($b) ? $b['phone_number'] : $b;
+                            return strcmp($phoneA, $phoneB);
+                        });
+                    }
+                ?>
                     <div class="col-md-2">
+                        
                         <div class="category">
                             <h2><?php echo $categoryName; ?> (<?php echo count($numbers); ?>)</h2>
                             <button class="btn btn-outline-<?php echo $categoryName === "Invalid Numbers" ? "danger" : "success"; ?> copy-button" 
@@ -169,19 +183,30 @@ $conn->close();
                                 Copy
                             </button>
                             <ul id="<?php echo strtolower(str_replace(' ', '-', $categoryName)); ?>-list">
-                                <?php foreach ($numbers as $number) : ?>
-                                    <li>
-                                        <?php if ($categoryName === "Invalid Numbers" && is_array($number)): ?>
-                                            <a href="edit_subscriber.php?id=<?php echo urlencode($number['subscriber_id']); ?> "style="text-decoration: underline; color: inherit;" 
-   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
-   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
-                                                <?php echo htmlspecialchars($number['phone_number']); ?>
-                                            </a>
-                                        <?php else: ?>
-                                            <?php echo htmlspecialchars(is_array($number) ? $number['phone_number'] : $number); ?>
-                                        <?php endif; ?>
-                                    </li>
-                                <?php endforeach; ?>
+                            <?php foreach ($numbers as $number): ?>
+    <li>
+    <?php 
+    if ($categoryName === "Other Numbers" && is_array($number) && isset($number['subscriber_id'])): ?>
+        
+        <a href="edit_subscriber.php?id=<?php echo urlencode($number['subscriber_id']); ?>" 
+           style="text-decoration: underline; color: inherit;" 
+           onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+           onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
+            <?php echo htmlspecialchars($number['phone_number']); ?>
+        </a>
+    <?php elseif ($categoryName === "Invalid Numbers" && is_array($number) && isset($number['subscriber_id'])): ?>
+        <a href="edit_subscriber.php?id=<?php echo urlencode($number['subscriber_id']); ?>" 
+           style="text-decoration: underline; color: inherit;" 
+           onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+           onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
+            <?php echo htmlspecialchars($number['phone_number']); ?>
+        </a>
+    <?php else: ?>
+        <?php echo htmlspecialchars(is_array($number) ? $number['phone_number'] : $number); ?>
+    <?php endif; ?>
+    </li>
+<?php endforeach; ?>
+
                             </ul>
                         </div>
                     </div>
@@ -190,7 +215,6 @@ $conn->close();
         </div>
     </div>
 </div>
-
 <script>
     // Initialize Clipboard.js
     var clipboard = new ClipboardJS('.copy-button');

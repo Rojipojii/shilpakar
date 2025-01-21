@@ -148,7 +148,18 @@ function findGroupForSubscriber($subscriberId, $groups) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['merge'])) {
+
         $mergeIds = $_POST['merge']; // Array of selected subscriber IDs
+        // // Check if at least two checkboxes are selected
+        // if (count($mergeIds) < 2) {
+        //     echo "Please select at least two subscribers to merge.";
+        //     exit(); // Stop further execution
+        // }
+
+        // Set a session variable to indicate the merge page origin
+        $_SESSION['from_merge_page'] = true;
+
+
 
         // Get the first subscriber ID in the group
         $firstSubscriberId = $mergeIds[0];
@@ -263,8 +274,8 @@ include("header.php"); ?>
     <?= $details['full_name'] ?>
 </a>
                                             </td>
-                                            <td><?= implode(', ', $details['phone_numbers']) ?></td>
-                                            <td><?= implode(', ', $details['emails']) ?></td>
+                                            <td><?= implode(', ', array_unique($details['phone_numbers'])) ?></td>
+                                            <td><?= implode(', ', array_unique($details['emails'])) ?></td>
                                             <td><?= implode(', ', $details['designation']) ?></td>
                                             <td><?= implode(', ', $details['organization']) ?></td>
                                         </tr>
@@ -275,11 +286,11 @@ include("header.php"); ?>
                         <!-- Hidden input to identify the group -->
                         <input type="hidden" name="group_id" value="<?= $startIndex + $index + 1 ?>">
                         <div class="d-flex justify-content-center mt-3">
-                            <button type="submit" class="btn btn-outline-success">Merge Group</button>
+                            <button type="submit" class="btn btn-outline-success">Merge</button>
                         </div>
                         <!-- Error message -->
                         <p class="text-danger text-center mt-2 error-message" style="display: none;">
-        Please select the checkbox.
+        Please select at least 2 checkbox.
     </p>
                     </form>
                 <?php endforeach; ?>
@@ -319,15 +330,15 @@ include("header.php"); ?>
             const checkboxes = form.querySelectorAll('input[name="merge[]"]');
             const errorMessage = form.querySelector('.error-message');
 
-            // Check if any checkbox is selected
-            const isChecked = Array.from(checkboxes).some(checkbox => checkbox.checked);
+            // Check if at least two checkboxes are selected
+            const checkedCount = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
 
-            if (!isChecked) {
-                e.preventDefault(); // Prevent form submission
-                errorMessage.style.display = 'block'; // Show error message
-            } else {
-                errorMessage.style.display = 'none'; // Hide error message
-            }
+if (checkedCount < 2) {
+    e.preventDefault(); // Prevent form submission
+    errorMessage.style.display = 'block'; // Show error message
+} else {
+    errorMessage.style.display = 'none'; // Hide error message
+}
         });
     });
 });

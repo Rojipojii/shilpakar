@@ -128,33 +128,47 @@ $totalEvents = countTotalEvents($conn);
 
 // Handle the form submission for editing events
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit"])) {
+    // Retrieve form inputs
     $editedEvent = $_POST["editedEventName"];
     $editedDate = $_POST["editedDate"];
+    $editedCategory = $_POST['editedCategoryId'];
+    $editedOrganizer = $_POST['editedOrganizerId'];
+
     $eventId = $_POST["eventId"];
 
-    if (!empty($editedEvent)) {
-        // Update the event name and date in the database
-        $sql = "UPDATE events SET event_name = ?, event_date = ? WHERE event_id = ?";
+    // Validate required fields
+    if (!empty($editedEvent) && !empty($editedDate) && !empty($editedOrganizer) && !empty($editedCategory)) {
+        // Update the event in the database
+        $sql = "UPDATE events 
+                SET event_name = ?, event_date = ?, organizer_id = ?, category_id = ? 
+                WHERE event_id = ?";
         $stmt = $conn->prepare($sql);
 
         if ($stmt) {
-            $stmt->bind_param("ssi", $editedEvent, $editedDate, $eventId);
+            // Bind parameters to the SQL statement
+            $stmt->bind_param("ssiii", $editedEvent, $editedDate, $editedOrganizer, $editedCategory, $eventId);
+
+            // Execute the statement
             if ($stmt->execute()) {
-                // Event updated successfully
                 echo "Event updated successfully!";
             } else {
                 echo "Error updating the event: " . $stmt->error;
             }
+
+            // Close the statement
             $stmt->close();
         } else {
             echo "Error preparing the statement: " . $conn->error;
         }
     } else {
-        echo "Event name cannot be empty.";
+        // Handle validation errors
+        echo "All fields (event name, date, organizer, and category) are required.";
     }
-    // Exit after handling the update, so the page doesn't reload.
+
+    // Exit after handling the update to prevent page reload
     exit;
 }
+
 
 // Handle the form submission for adding an event
 else if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["eventName"]) && isset($_POST["eventDate"]) && isset($_POST["category"]) && isset($_POST["organizer"])) {
@@ -180,13 +194,9 @@ else if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["eventName"]) && i
         if ($stmt->execute()) {
             // Event added successfully
             $eventMessage = "Event added successfully!";
-            echo "<script>
-                      alert('$eventMessage');
-                      window.location.href = window.location.href; // Reload the page
-                  </script>";
         } else {
             $eventMessage = "Error: " . $stmt->error;
-            echo "<script>alert('$eventMessage');</script>";
+            // echo "<script>alert('$eventMessage');</script>";
         }
 
         // Close the database connection
@@ -271,8 +281,43 @@ $organizers = fetchOrganizers($conn);
         // Add an input field for editing the event date
         echo "<input class='form-control event-date-input' data-event-id='$eventId' type='text' value='$eventDate' style='display: none;'>";
         echo "</td>";
-        echo "<td>$categoryName</td>"; // Display category
-        echo "<td>$organizerName</td>"; // Display organizerzwi
+        
+        // Category dropdown - Initially hidden
+        echo "<td>";
+                // Display the current category
+                 echo "<span class='category-name' data-event-id='$eventId'>$categoryName</span>";
+                 echo "<select class='form-control category-dropdown' data-event-id='$eventId' style='display: none;'>";
+
+                 // Sort categories alphabetically by category name
+                 asort($categories);
+                 
+                 foreach ($categories as $categoryId => $categoryName) {
+                     $selected = (isset($event['category_id']) && $categoryId == $event['category_id']) ? 'selected' : '';
+                     echo "<option value='$categoryId' $selected>$categoryName</option>";
+                 }
+                 
+                 echo "</select>";
+                 
+
+        echo "</td>";
+        // Organizer dropdown - Initially hidden
+        echo "<td>";
+        // Display the current organizer
+        echo "<span class='organizer-name' data-event-id='$eventId'>$organizerName</span>";
+        echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;'>";
+
+         // Sort categories alphabetically by category name
+         asort($organizers);
+
+        foreach ($organizers as $organizerId => $organizerName) {
+            $selected = (isset($event['organizer_id']) && $organizerId == $event['organizer_id']) ? 'selected' : '';
+            echo "<option value='$organizerId' $selected>$organizerName</option>";
+             // Debugging: Print selected value and its status
+        }
+        echo "</select>"; 
+        echo "</td>";
+
+        // echo "<td>$organizerName</td>"; // Display organizerzwi
         echo "<td>";
         echo "$totalAttendees ($repeatedAttendees)";
         echo "</td>";
@@ -377,101 +422,195 @@ $organizers = fetchOrganizers($conn);
 
 <!-- Handle event editing and saving -->
 <script>
+
+ // Function to refresh the event list
+ function refreshEventList() {
+        fetch("<?php echo $_SERVER['PHP_SELF']; ?>") // Adjust the URL as needed to the endpoint that fetches the updated event list
+            .then(response => response.text())
+            .then(data => {
+    console.log(data); // Check if this contains the correct HTML for the event list
+    const eventListContainer = document.getElementById("eventListContainer");
+    if (eventListContainer) {
+        eventListContainer.innerHTML = data;
+    }
+})
+            .catch(error => {
+                console.error("Error:", error);
+            });
+    }
+
+    function refreshEventListeners() {
     const editEventButtons = document.querySelectorAll(".edit-event");
     const saveEventButtons = document.querySelectorAll(".save-event");
 
+    // Reapply listeners for edit and save buttons
     editEventButtons.forEach(button => {
-        button.addEventListener("click", function (event) {
-            event.preventDefault(); // Prevent the default behavior of the button click
-
-            const eventId = this.getAttribute("data-event-id");
-            const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
-            const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
-            const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
-            const saveButton = document.querySelector(`.save-event[data-event-id='${eventId}']`);
-
-            // Initialize a date picker for the input field
-            flatpickr(dateInput, {
-                dateFormat: 'Y-m-d', // Format for displaying the date
-                allowInput: true, // Allow manual input
-            });
-
-            // Enable editing for the event name
-            eventElement.contentEditable = true;
-            eventElement.focus();
-
-            // Enable editing for the event date
-            dateElement.style.display = "none";
-            dateInput.style.display = "inline";
-            dateInput.focus();
-
-            // Show the "Save" button and hide the "Edit" button
-            saveButton.style.display = "inline";
-            this.style.display = "none";
-        });
+        button.addEventListener("click", handleEditEvent);
     });
-
     saveEventButtons.forEach(button => {
-        button.addEventListener("click", function () {
-            event.preventDefault(); // Prevent the default behavior of the button click
-            const eventId = this.getAttribute("data-event-id");
-            const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
-            const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
-            const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
+        button.addEventListener("click", handleSaveEvent);
+    });
+}
+
+
+const editEventButtons = document.querySelectorAll(".edit-event");
+const saveEventButtons = document.querySelectorAll(".save-event");
+
+// editEventButtons.forEach(button => {
+//     button.addEventListener("click", function (event) {
+//         event.preventDefault(); // Prevent default behavior of button click
+
+//         const eventId = this.getAttribute("data-event-id");
+
+//         // Ensure categoryElement is defined correctly
+//         const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
+//         const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
+//         const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
+//         const categoryElement = document.querySelector(`.category-name[data-event-id='${eventId}']`);
+//         const categoryDropdown = document.querySelector(`.category-dropdown[data-event-id='${eventId}']`);
+//         const organizerElement = document.querySelector(`.organizer-name[data-event-id='${eventId}']`);
+//         const organizerDropdown = document.querySelector(`.organizer-dropdown[data-event-id='${eventId}']`);
+//         const saveButton = document.querySelector(`.save-event[data-event-id='${eventId}']`);
+
+//             flatpickr(dateInput, {
+//                 dateFormat: 'Y-m-d', // Format for displaying the date
+//                 allowInput: true,     // Allow manual input
+//             });
+
+//             // Enable editing for event name
+//             eventElement.contentEditable = true;
+//             eventElement.focus();
+
+//             // Enable editing for event date
+//             dateElement.style.display = "none";
+//             dateInput.style.display = "inline";
+//             dateInput.focus();
+
+//             // Enable editing for category
+//             categoryElement.style.display = "none";
+//             categoryDropdown.style.display = "inline";
+
+//             // Enable editing for organizer
+//             organizerElement.style.display = "none";
+//             organizerDropdown.style.display = "inline";
+
+//             // Show the "Save" button and hide the "Edit" button
+//             saveButton.style.display = "inline";
+//             this.style.display = "none";
+//     });
+// });
+
+editEventButtons.forEach(button => {
+    button.addEventListener("click", function (event) {
+        event.preventDefault();
+
+        const eventId = this.getAttribute("data-event-id");
+
+        // Define all required elements
+        const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
+        const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
+        const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
+        const categoryElement = document.querySelector(`.category-name[data-event-id='${eventId}']`);
+        const categoryDropdown = document.querySelector(`.category-dropdown[data-event-id='${eventId}']`);
+        const organizerElement = document.querySelector(`.organizer-name[data-event-id='${eventId}']`);
+        const organizerDropdown = document.querySelector(`.organizer-dropdown[data-event-id='${eventId}']`);
+        const saveButton = document.querySelector(`.save-event[data-event-id='${eventId}']`);
+
+        // Validate all required elements
+        if (!eventElement || !dateElement || !dateInput || !categoryElement || !categoryDropdown || !organizerElement || !organizerDropdown || !saveButton) {
+            console.error(`Missing required elements for eventId: ${eventId}`);
+            return; // Exit if any element is missing
+        }
+
+        // Apply Flatpickr to the date input
+        flatpickr(dateInput, {
+            dateFormat: 'Y-m-d',
+            allowInput: true,
+        });
+
+        // Enable editing
+        eventElement.contentEditable = true;
+        eventElement.focus();
+        dateElement.style.display = "none";
+        dateInput.style.display = "inline";
+        dateInput.focus();
+        categoryElement.style.display = "none";
+        categoryDropdown.style.display = "inline";
+        organizerElement.style.display = "none";
+        organizerDropdown.style.display = "inline";
+
+        // Toggle buttons
+        saveButton.style.display = "inline";
+        this.style.display = "none";
+    });
+});
+
+
+saveEventButtons.forEach(button => {
+    button.addEventListener("click", function (event) {
+        event.preventDefault(); // Prevent default behavior of button click
+
+        const eventId = this.getAttribute("data-event-id");
+
+        // Ensure categoryElement and categoryDropdown are defined
+        const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
+        const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
+        const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
+        const categoryDropdown = document.querySelector(`.category-dropdown[data-event-id='${eventId}']`);
+        const organizerDropdown = document.querySelector(`.organizer-dropdown[data-event-id='${eventId}']`);
+
             const updatedEventName = eventElement.textContent.trim();
             const updatedEventDate = dateInput.value;
+            const updatedCategoryId = categoryDropdown.value;
+            const updatedOrganizerId = organizerDropdown.value;
 
-            // Send an AJAX request to update the event name and date
+            // Prepare data for AJAX request
             const formData = new FormData();
-            formData.append("editedEventName", updatedEventName); // Use the correct name for the field
+            formData.append("editedEventName", updatedEventName);
             formData.append("editedDate", updatedEventDate);
             formData.append("eventId", eventId);
+            formData.append("editedCategoryId", updatedCategoryId);
+            formData.append("editedOrganizerId", updatedOrganizerId);
             formData.append("edit", 1);
 
             fetch("<?php echo $_SERVER['PHP_SELF']; ?>", {
                 method: "POST",
                 body: formData
-
-,
             })
-                .then(response => response.text())
-                .then(data => {
-                    if (data.includes("Event updated successfully")) {
-                        // Update the category element
-                        eventElement.textContent = updatedEventName;
-
-                        // Display the success message
-                        document.getElementById("eventResponseMessage").innerHTML = '<div class="alert alert-success">Event updated successfully</div>';
-
-                        // Hide the "Save" button and show the "Edit" button
-                        button.style.display = "none";
-                        document.querySelector(`.edit-event[data-event-id='${eventId}']`).style.display = "inline";
-                    } else {
-                        // Handle the error appropriately
-                        alert("Failed to update event: " + data);
-                    }
-                })
-                .catch(error => {
-                    console.error("Error:", error);
-                });
-        });
-    });
-
-    // Function to refresh the event list
-    function refreshEventList() {
-        fetch("<?php echo $_SERVER['PHP_SELF']; ?>") // Adjust the URL as needed to the endpoint that fetches the updated event list
             .then(response => response.text())
             .then(data => {
-                // Find the existing event list container and replace its content
-                const eventListContainer = document.getElementById("eventListContainer");
-                if (eventListContainer) {
-                    eventListContainer.innerHTML = data; // This will replace the old event list content with the updated content
+                if (data.includes("Event updated successfully")) {
+                    // Update the category element
+                    eventElement.textContent = updatedEventName;
+                    dateElement.textContent = updatedEventDate;
+
+                    categoryDropdown.style.display = "none";
+                    categoryElement.style.display = "inline";
+                    categoryElement.textContent = categoryDropdown.options[categoryDropdown.selectedIndex].text;
+
+                    organizerDropdown.style.display = "none";
+                    organizerElement.style.display = "inline";
+                    organizerElement.textContent = organizerDropdown.options[organizerDropdown.selectedIndex].text;
+
+                    // Display success message
+                    document.getElementById("eventResponseMessage").innerHTML = '<div class="alert alert-success">Event updated successfully</div>';
+
+                    // Hide the "Save" button and show the "Edit" button
+                    button.style.display = "none";
+                    document.querySelector(`.edit-event[data-event-id='${eventId}']`).style.display = "inline";
+
+                    // Refresh the page
+                    refreshEventList();
+                    refreshEventListeners();  // This will reload the page and reflect the updated event
+                } else {
+                    alert("Failed to update event: " + data);
                 }
             })
             .catch(error => {
                 console.error("Error:", error);
             });
-    }
+    });
+});
 </script>
 
 <!-- Activate Events based on current date -->

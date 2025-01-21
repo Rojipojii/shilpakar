@@ -33,23 +33,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST["password"];
 
     // Fetch user data from the database with a case-sensitive comparison
-    $sql = "SELECT id, username, password FROM login WHERE BINARY username = ? AND BINARY password = ?";
-$stmt = $conn->prepare($sql);
+    $sql = "SELECT id, username, password, role FROM login WHERE BINARY username = ?";
 
-if (!$stmt) {
-    die("Prepare failed: " . $conn->error);
-}
+    $stmt = $conn->prepare($sql);
 
-$stmt->bind_param("ss", $username, $password);
+    if (!$stmt) {
+        die("Prepare failed: " . $conn->error);
+    }
 
-    // $sql = "SELECT id, username, password FROM login WHERE BINARY username = ?";
-    // $stmt = $conn->prepare($sql);
-
-    // if (!$stmt) {
-    //     die("Prepare failed: " . $conn->error);
-    // }
-
-    // $stmt->bind_param("s", $username);
+    // Bind the parameters for username and password (only username here for the query)
+    $stmt->bind_param("s", $username);  // Only bind username since it's the only parameter in the query
 
     if (!$stmt->execute()) {
         die("Execute failed: " . $stmt->error);
@@ -58,10 +51,13 @@ $stmt->bind_param("ss", $username, $password);
     $result = $stmt->get_result();
 
     if ($result->num_rows == 1) {
-        $row = $result->fetch_assoc();
-        if ($password == $row["password"]) {
+        $row = $result->fetch_assoc();  // Fetch the result row
+        if ($password == $row["password"]) {  // Compare entered password with the database password
             // Password is correct, create a session and log in the user
             $_SESSION['id'] = $row["id"];
+            $_SESSION['username'] = $row["username"];
+            
+            $_SESSION['role'] = $row["role"]; // Store the role for later use (e.g., access control)
             header("Location: dashboard.php"); // Redirect to a logged-in page
             exit();
         } else {
@@ -75,7 +71,7 @@ $stmt->bind_param("ss", $username, $password);
         $alertType = "alert-danger";
     }
 
-    // Close the database connection
+    // Close the statement and connection
     $stmt->close();
     $conn->close();
 }

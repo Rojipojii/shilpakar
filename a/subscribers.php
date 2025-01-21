@@ -10,6 +10,7 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
+
 require_once "db.php"; // Include the database connection file
 
 // Check if the 'merge_success' parameter is in the URL
@@ -240,7 +241,6 @@ if (isset($_GET["delete"]) && is_numeric($_GET["delete"])) {
             // Use AJAX to refresh the table without a full page reload
             echo "<script>
             alert('Record deleted successfully.');
-            window.location.href = window.location.href;
             </script>";
             exit();
         } catch (Exception $e) {
@@ -348,6 +348,8 @@ ORDER BY subscribers.subscriber_id DESC;
 ";
     $stmt = $conn->prepare($sql);
 }
+
+
 
 // Execute the statement
 $stmt->execute();
@@ -537,29 +539,71 @@ if ($result->num_rows > 0) {
             $phoneNumbers[] = $phoneData['phone_number']; // Add each phone number to the array
         }
 
-        // Fetch all emails for the subscriber from the database
-$sqlEmail = "SELECT email FROM emails WHERE subscriber_id = ?";
+
+// Fetch all emails and their visibility (hidden) status for the subscriber
+$sqlEmail = "SELECT email, hidden FROM emails WHERE subscriber_id = ?";
 $stmtEmail = $conn->prepare($sqlEmail);
-$stmtEmail->bind_param("i", $row["subscriber_id"]);
+$stmtEmail->bind_param("i", $row["subscriber_id"]);  // Bind the subscriber_id parameter
 $stmtEmail->execute();
 $resultEmail = $stmtEmail->get_result();
+
+// Initialize arrays to store emails and their visibility
+$emails = [];
 while ($emailData = $resultEmail->fetch_assoc()) {
-    // Normalize email to lowercase
+    // Normalize email to lowercase and store visibility
     $normalizedEmail = strtolower(trim($emailData['email']));
-    $emails[] = $normalizedEmail; // Add each normalized email to the array
+    $emails[] = ['email' => $normalizedEmail, 'hidden' => $emailData['hidden']];
 }
 
-        // Remove duplicates by making the arrays unique
-        $phoneNumbers = array_unique($phoneNumbers);
-        $emails = array_unique($emails);
+// Deduplicate emails while preserving the visibility status
+$uniqueEmails = [];
+foreach ($emails as $emailData) {
+    $uniqueEmails[$emailData['email']] = $emailData;  // Using the email as the key ensures uniqueness
+}
 
-        // Display unique phone numbers and emails as comma-separated values
-        $phoneNumbersString = implode(', ', $phoneNumbers);
-        $emailsString = implode(', ', $emails);
+// Remove duplicates by making the arrays unique
+$phoneNumbers = array_unique($phoneNumbers);
+// Now $uniqueEmails contains only unique emails
+$emails = array_values($uniqueEmails);  // Reset the array's keys
+
+// Display unique phone numbers and emails as comma-separated values
+$phoneNumbersString = implode(', ', $phoneNumbers);
+$emailAddresses = array_map(function($emailData) {
+    return $emailData['email'];
+}, $emails);
+$emailsString = implode(', ', $emailAddresses); // Now we use the email addresses array
+
 
         // Display phone numbers and emails
         echo "<td>" . ($phoneNumbersString ? $phoneNumbersString : '&mdash;') . "</td>";  // Display "—" if no phone numbers
-        echo "<td>" . ($emailsString ? $emailsString : '&mdash;') . "</td>";  // Display "—" if no emails
+
+
+        
+// Now display the emails and their visibility toggle button
+echo "<td>";
+if (!empty($emails)) {
+    foreach ($emails as $emailData) {
+        // Display the email address
+        $email = htmlspecialchars($emailData['email']);  // Safely handle special characters
+        echo $email . "<br>";
+
+        // Check the email visibility for each email
+        $emailHidden = $emailData['hidden'];
+
+        // Display the toggle button based on the current visibility
+        $buttonText = $emailHidden == 1 ? 'full' : 'not';
+        $buttonClass = $emailHidden == 1 ? 'btn-outline-primary' : 'btn-outline-secondary';
+        
+        // Generate the button with unique ID and email as the parameter
+        echo "<button id='emailToggleBtn_" . $email . "' class='btn $buttonClass btn-sm' onclick='toggleEmailVisibility(\"$email\")'>$buttonText</button><br>";
+    }
+} else {
+    // Display '—' if no emails are available
+    echo '&mdash;';
+}
+echo "</td>";
+
+
 
          // Fetch designations and organizations
 $designations = [];
@@ -604,10 +648,70 @@ echo "<td>" . $organizationsString . "</td>";  // Display organizations or "—"
 
         echo "<td>" . ($row["number_of_events_attended"] ? $row["number_of_events_attended"] : '') . "</td>";
 
+// Get the logged-in user ID
+$userId = $_SESSION['id'];
+
+ // Fetch the user's role (assuming the role is stored in the "login" table)
+$sql = "SELECT role FROM login WHERE id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$stmt->bind_result($role);
+$stmt->fetch();
+$stmt->close();
+
+// Fetch the organizer ID the logged-in user is affiliated with
+$sql = "SELECT organizer_id FROM user_organizers WHERE user_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$stmt->bind_result($userOrganizerId);
+$userOrganizers = [];
+while ($stmt->fetch()) {
+    $userOrganizers[] = $userOrganizerId; // Store the organizer IDs the user is affiliated with
+}
+$stmt->close();
+
+// echo "User ID: " . $userId; // Debugging line
+
+// // Output the contents of the $userOrganizers array to see what has been fetched
+// echo "<pre>";
+// print_r($userOrganizers); // This will print the array of organizer IDs
+// echo "</pre>";
+
+
+
+// Get the subscriber's organizer ID from the event_subscriber_mapping table
+$subscriberId = $row['subscriber_id']; // Assuming you have this from your subscriber data
+
+// // Debug: Print the subscriberId to ensure it's correct
+// echo "Subscriber ID: " . $subscriberId . "<br>";
+$sql = "SELECT organizer_id FROM event_subscriber_mapping WHERE subscriber_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $subscriberId);
+$stmt->execute();
+$stmt->bind_result($subscriberOrganizerId);
+// Check if a result was fetched
+if ($stmt->fetch()) {
+    // If a result was fetched, print the organizer ID
+    // echo "Organizer ID: " . $subscriberOrganizerId . "<br>";
+} else {
+    // If no result, print a message indicating no record was found
+    // echo "No organizer ID found for subscriber ID: " . $subscriberId . "<br>";
+}
+$stmt->close();       
+
 
         // Actions
 echo "<td>";
-echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a> ";
+if ($role == 'user' && in_array((int)$subscriberOrganizerId, array_map('intval', $userOrganizers))) {
+    // Only display the Edit button if the role is not 'user' and the user is affiliated with the same organizer
+    echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a>";
+}elseif($role == 'admin'){
+    // Only display the Edit button if the role is not 'user' and the user is affiliated with the same organizer
+    echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a>";
+}
+// echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a> ";
 echo "<a href='javascript:void(0);' onclick='deleteRecord(" . $row["subscriber_id"] . ")' class='btn btn-outline-danger btn-sm' title='Delete'><i class='bi bi-trash3'></i></a> ";
 echo "<a href='subscribers.php?id=" . $row['subscriber_id'] . "' class='btn btn-outline-success btn-sm'><i class='bi bi-download' title='Download Vcard'></i></a>";
 
@@ -656,6 +760,65 @@ if (in_array($row["subscriber_id"], $matchedSubscribers)) {
     }
 }
 </script>
+
+<script>
+function toggleEmailVisibility(email) {
+    if (!email || !email.includes('@')) {
+        console.error("Invalid email provided: " + email);
+        return;
+    }
+
+    // Create a new AJAX request
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "update_email_visibility.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    // Log the email being sent
+    console.log("Toggling visibility for email: " + email);
+
+    // Handle the server response
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    // Parse the JSON response
+                    var response = JSON.parse(xhr.responseText);
+
+                    if (response.success) {
+                        // Toggle the button text dynamically
+                        var button = document.getElementById('emailToggleBtn_' + email);
+                        if (button) {
+                            if (button.innerText === 'full') {
+                                button.innerText = 'not';
+                                button.classList.remove('btn-outline-primary');
+                                button.classList.add('btn-outline-secondary');
+                            } else {
+                                button.innerText = 'full';
+                                button.classList.remove('btn-outline-secondary');
+                                button.classList.add('btn-outline-primary');
+                            }
+                        }
+                    } else {
+                        console.error("Server response indicates failure:", response.message);
+                    }
+                } catch (error) {
+                    console.error("Error parsing server response:", error);
+                    console.error("Response text:", xhr.responseText);
+                }
+            } else {
+                console.error("AJAX request failed. Status:", xhr.status, "Response:", xhr.responseText);
+            }
+        }
+    };
+
+    // Send the email to the server
+    xhr.send("email=" + encodeURIComponent(email));
+}
+</script>
+
+
+
+
 
 <!-- jQuery -->
 <script src="plugins/jquery/jquery.min.js"></script>
@@ -749,7 +912,7 @@ if (selectedIds.length === 0) {
         className: 'btn-merge',
     init: function (dt, node, config) {
         $(node).css({
-            'background-color': '#62828a',
+            'background-color': '#42a832',
             'color': '#fff',
             'border': 'none',
             'padding': '8px 12px',

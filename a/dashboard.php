@@ -14,8 +14,10 @@ if (!isset($_SESSION['id'])) {
 require_once "db.php"; // Include the database connection file
 require_once "mergeGroups.php"; // Include the function file
 
+
 // Get the total number of groups to merge
 $totalGroupsToMerge = getGroupsToMerge($conn);
+
 
 // Store the result in session
 $_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
@@ -234,6 +236,26 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
     return array("total" => $totalAttendees, "repeated" => $repeatedAttendees);
 }
 
+// Fetch the count of subscribers without email content
+$subscribersWithoutEmailQuery = "
+    SELECT COUNT(*) AS count
+    FROM subscribers s
+    WHERE NOT EXISTS (
+        SELECT 1 FROM emails e WHERE e.subscriber_id = s.subscriber_id
+    )";
+$subscribersWithoutEmailResult = $conn->query($subscribersWithoutEmailQuery);
+$subscribersWithoutEmailCount = $subscribersWithoutEmailResult->fetch_assoc()['count'];
+
+// Fetch the count of subscribers without phone content
+$subscribersWithoutPhoneQuery = "
+    SELECT COUNT(*) AS count
+    FROM subscribers s
+    WHERE NOT EXISTS (
+        SELECT 1 FROM phone_numbers p WHERE p.subscriber_id = s.subscriber_id
+    )";
+$subscribersWithoutPhoneResult = $conn->query($subscribersWithoutPhoneQuery);
+$subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['count'];
+
 
 ?>
 
@@ -317,10 +339,29 @@ function getEventAttendees($conn, $event_id = null, $category_id = null, $organi
         </div>
     </div>
 </div>
-
-
 </div>
 
+<ul class="list-group">
+            <div class="row">
+                <!-- Display count for people without email -->
+                <li class="list-group-item col-md-6">
+                    <label>Total Number of People Without Email:</label>       
+                    <a href="listEmails.php" style="text-decoration: underline; color: inherit;" 
+   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';" ><?= $subscribersWithoutEmailCount; ?></a>
+                </li>
+
+                <!-- Display count for people without phone -->
+                <li class="list-group-item col-md-6">
+                    <label>Total Number of People Without Phone Number:</label>
+                    <a href="listnumbers.php" style="text-decoration: underline; color: inherit;" 
+   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';"><?= $subscribersWithoutPhoneCount; ?></a>
+                </li>
+            </div>
+        </ul>
+
+<br>
 
 <ul class="list-group">
     <div class="row">

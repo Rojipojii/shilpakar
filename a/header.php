@@ -1,10 +1,18 @@
 <?php
-// session_start(); // Start the session at the beginning of the page
+
+// Check if the user is logged in
+if (!isset($_SESSION['username'])) {
+  header("Location: index.php"); // Redirect to the login page if not logged in
+  exit();
+}
 
 if (isset($_SESSION['totalGroupsToMerge'])) {
     $totalGroupsToMerge = $_SESSION['totalGroupsToMerge'];
     // Use $totalGroupsToMerge as needed
 }
+
+
+
 
 ?>
 
@@ -41,12 +49,6 @@ if (isset($_SESSION['totalGroupsToMerge'])) {
 
   <!-- Navbar -->
   <nav class="main-header navbar navbar-expand navbar-white navbar-light">
-    <!-- Left navbar links -->
-    <!-- <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="bi bi-list"></i></a>
-      </li>
-    </ul> -->
   
     <!-- Right navbar links -->
     <ul class="navbar-nav ml-auto">
@@ -54,19 +56,10 @@ if (isset($_SESSION['totalGroupsToMerge'])) {
       <!-- Search Form and Logout Button -->
       <li class="nav-item">
         <div class="row">
-          <!-- <div class="col"> -->
-            <!-- Search Form -->
-            <!-- <div class="search-form">
-              <form id="search-form" class="search-form" method="get" action="subscribers.php">
-                <input class="form-control" type="text" name="search" placeholder="Search..." aria-label="Search"> -->
-                <!-- <button class="btn btn-outline-success" type="submit">Search</button> -->
-              <!-- </form>
-            </div>
-          </div> -->
           <div class="col">
             <!-- Logout Button -->
             <div class="logout-btn">
-              <a href="logout.php" class="btn btn-danger">Log Out <i class="bi bi-box-arrow-right"></i></a>
+            <i class="bi bi-person-fill"> </i><?php echo $_SESSION['username']; ?> <a href="logout.php" class="btn btn-danger">  <i class="bi bi-box-arrow-right"></i></a>
             </div>
           </div>
         </div>
@@ -106,12 +99,14 @@ if (isset($_SESSION['totalGroupsToMerge'])) {
                         <p>Subscriber's List</p>
                     </a>
                 </li>
+                <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
                 <li class="nav-item">
                     <a href="subscribers" class="nav-link">
                         <i class="bi bi-person-plus-fill"></i>
                         <p>Add Subscribers</p>
                     </a>
                 </li>
+                <?php endif; ?>
                 <li class="nav-item">
                     <a href="events" class="nav-link">
                         <i class="bi bi-calendar-event"></i>
@@ -142,16 +137,37 @@ if (isset($_SESSION['totalGroupsToMerge'])) {
                         <p>Create Mailing-List</p>
                     </a>
                 </li>
-
+                <li class="nav-item">
+                    <a href="listEmails.php" class="nav-link">
+                        <i class="bi bi-file-earmark-check"></i>
+                        <p>Full Emails</p>
+                    </a>
+                </li>
+                
+                <?php if (isset($totalGroupsToMerge) && $totalGroupsToMerge > 0): ?>
                 <li class="nav-item">
     <a href="merge" class="nav-link">
         <i class="bi bi-intersect"></i>      
         <p>Merge & Fix</p>
-        <?php if (isset($totalGroupsToMerge) && $totalGroupsToMerge > 0): ?>
+        
             <span>(<?= $totalGroupsToMerge ?>)</span>
-        <?php endif; ?>
+
     </a>
 </li>
+<?php endif; ?>
+
+
+
+<?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+<li class="nav-item">
+    <a href="createUsers.php" class="nav-link">
+        <i class="bi bi-person-plus-fill"></i>      
+        <p>Create User</p>
+    </a>
+</li>
+<?php endif; ?>
+
+
 
             </ul>
             

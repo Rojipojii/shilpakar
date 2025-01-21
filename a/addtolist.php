@@ -162,7 +162,7 @@ else if (isset($_POST["AddSubscribersOrganizer"])) {
                 // Insert the record into the database only if the row is not empty
                 if (!$isEmptyRow) {
                     $fullName = $data[0];
-                    $mobileNumber = $data[1];
+                    $mobileNumber = trim($data[1]);
                     $email = isset($data[2]) ? strtolower(trim($data[2])) : null;
                     $designation = isset($data[3]) ? trim($data[3]) : null;
                     $organization = isset($data[4]) ? trim($data[4]) : null; 
@@ -277,7 +277,7 @@ if (isset($_POST["AddSubscribersEvent"])) {
                 // Insert the record into the database only if the row is not empty
                 if (!$isEmptyRow) {
                     $fullName = $data[0];
-                    $mobileNumber = $data[1];
+                    $mobileNumber = trim($data[1]);
                     $email = isset($data[2]) ? strtolower(trim($data[2])) : null;
                     $designation = isset($data[3]) ? trim($data[3]) : null;
                     $organization = isset($data[4]) ? trim($data[4]) : null; 
@@ -377,9 +377,11 @@ $events = fetchEvents($conn);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+
     <title>Register</title>
 </head>
 <body>
@@ -485,17 +487,51 @@ $events = fetchEvents($conn);
 <div class="col-md-6">
 <h2>Bulk Add</h2>
 <ul class="nav nav-tabs" id="bulkAddTabs" role="tablist">
+        <!-- Add the new tab button here -->
+        <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="eventTab" data-bs-toggle="tab" data-bs-target="#eventSection" type="button" role="tab" aria-controls="eventSection" aria-selected="true">Bulk Add by Event</button>
+    </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="organizerTab" data-bs-toggle="tab" data-bs-target="#organizerSection" type="button" role="tab" aria-controls="organizerSection" aria-selected="false">Bulk Add by Organizer</button>
-    </li>
-    <!-- Add the new tab button here -->
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="eventTab" data-bs-toggle="tab" data-bs-target="#eventSection" type="button" role="tab" aria-controls="eventSection" aria-selected="false">Bulk Add by Event</button>
     </li>
 </ul>
 
 <div class="tab-content" id="bulkAddTabsContent">
-<div class="tab-pane fade" id="organizerSection" role="tabpanel" aria-labelledby="organizerTab">
+<div class="tab-pane show active" id="eventSection" role="tabpanel" aria-labelledby="eventTab">
+    <!-- Bulk Add by Event Form -->
+    <form id="bulkAddEventForm" action="addtolist.php" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="csvFile" class="form-label"><i class="bi bi-eyedropper"></i>Choose a CSV file:</label>
+            <input type="file" name="csvFile" accept=".csv" class="form-control" required>
+            <p class="form-text text-muted">
+                <em>Note: The CSV file should have 5 columns in this order - Full Name, Mobile Number, Email, Designation, Organization.</em>
+            </p>
+        </div>
+        <div class="mb-3">
+    <label for="event" class="form-label">Event:</label>
+    <select id="event" name="event" class="form-select" required>
+        <option value="" disabled selected>Select Event</option>
+        <?php
+        // Sort the events array by the event date in descending order (latest events at the top)
+        usort($events, function($a, $b) {
+            $dateA = strtotime($a["event_date"]);
+            $dateB = strtotime($b["event_date"]);
+            return $dateB - $dateA; // Sort in descending order
+        });
+
+        // Loop through the sorted events and display each as an option
+        foreach ($events as $event) {
+            // echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . " (ID: " . htmlspecialchars($event["event_id"]) . ")</option>";
+            echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . "</option>";
+        }        
+        ?>
+    </select>
+</div>
+
+        <button type="submit" name="AddSubscribersEvent" class="btn btn-outline-success">Add Subscribers</button>
+    </form>
+</div>
+<div class="tab-pane" id="organizerSection" role="tabpanel" aria-labelledby="organizerTab">
 <!-- Bulk Add by Organizer Form -->
 <form id="bulkAddOrganizerForm" action="addtolist.php" method="post" enctype="multipart/form-data">
                         <div class="mb-3">
@@ -537,41 +573,6 @@ $events = fetchEvents($conn);
                     <button type="submit" name="AddSubscribersOrganizer" class="btn btn-outline-success">Add Subscribers</button>
  </form>
 </div>                       
-<div class="tab-pane fade" id="eventSection" role="tabpanel" aria-labelledby="eventTab">
-    <!-- Bulk Add by Event Form -->
-    <form id="bulkAddEventForm" action="addtolist.php" method="post" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label for="csvFile" class="form-label"><i class="bi bi-eyedropper"></i>Choose a CSV file:</label>
-            <input type="file" name="csvFile" accept=".csv" class="form-control" required>
-            <p class="form-text text-muted">
-                <em>Note: The CSV file should have 5 columns in this order - Full Name, Mobile Number, Email, Designation, Organization.</em>
-            </p>
-        </div>
-        <div class="mb-3">
-    <label for="event" class="form-label">Event:</label>
-    <select id="event" name="event" class="form-select" required>
-        <option value="" disabled selected>Select Event</option>
-        <?php
-        // Sort the events array by the event date in descending order (latest events at the top)
-        usort($events, function($a, $b) {
-            $dateA = strtotime($a["event_date"]);
-            $dateB = strtotime($b["event_date"]);
-            return $dateB - $dateA; // Sort in descending order
-        });
-
-        // Loop through the sorted events and display each as an option
-        foreach ($events as $event) {
-            // echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . " (ID: " . htmlspecialchars($event["event_id"]) . ")</option>";
-            echo "<option value='" . htmlspecialchars($event["event_id"]) . "'>" . htmlspecialchars($event["event_name"]) . "</option>";
-        }        
-        ?>
-    </select>
-</div>
-
-        <button type="submit" name="AddSubscribersEvent" class="btn btn-outline-success">Add Subscribers</button>
-    </form>
-</div>
-
 </div>
 </div>
 </div>
@@ -587,17 +588,20 @@ $events = fetchEvents($conn);
     bulkAddTabs.show();
 
     bulkAddTabsContent.addEventListener('shown.bs.tab', function (event) {
-        var tabContentId = event.target.getAttribute('href');
-        var tabContent = document.querySelector(tabContentId + ' form');
-        tabContent.reset(); // Reset form fields when switching tabs
-    });
-</script>
+    var tabContentId = event.target.getAttribute('href');
+    if (!tabContentId) return;
+    var tabContent = document.querySelector(tabContentId + ' form');
+    if (tabContent) {
+        tabContent.reset();
+    }
+});
 
 </script>
+
  <script>
-                    // Function to display the success modal
-                       function showSuccessModal(message) {
-                       var modal = document.getElementById("successModal");
+// Function to display the success modal
+function showSuccessModal(message) {
+var modal = document.getElementById("successModal");
                        var successMessage = document.getElementById("successMessage");
                     // Set the success message in the modal
                     successMessage.textContent = message;
@@ -618,9 +622,9 @@ $events = fetchEvents($conn);
                     // Check if the successMessage variable is set, and if so, display the success modal
                     if (typeof successMessage !== "undefined") {
                     showSuccessModal(successMessage);
-                    }
+                    }                      
                     </script>
 
-    
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
