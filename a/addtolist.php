@@ -73,6 +73,13 @@ function fetchEvents($conn) {
     }
     return $events;
 }
+
+// Function to clean and normalize the phone number
+function cleanPhoneNumber($number) {
+    // Remove any non-numeric characters
+    return preg_replace('/[^0-9]/', '', $number);
+}
+
 if (isset($_POST["Submit"])) { 
     // Retrieve form data
     $fullName = $_POST['fullName'];
@@ -162,7 +169,8 @@ else if (isset($_POST["AddSubscribersOrganizer"])) {
                 // Insert the record into the database only if the row is not empty
                 if (!$isEmptyRow) {
                     $fullName = $data[0];
-                    $mobileNumber = trim($data[1]);
+                    // Inside the loop where the phone number is processed
+                    $mobileNumber = isset($data[1]) ? cleanPhoneNumber(trim($data[1])) : '';
                     $email = isset($data[2]) ? strtolower(trim($data[2])) : null;
                     $designation = isset($data[3]) ? trim($data[3]) : null;
                     $organization = isset($data[4]) ? trim($data[4]) : null; 
@@ -180,7 +188,7 @@ else if (isset($_POST["AddSubscribersOrganizer"])) {
                     $insertStmt->close();
 
                     // Insert the phone number
-if (trim($mobileNumber) !== '') { // Check if the phone number is not empty or just spaces
+if ($mobileNumber !== '') { // Check if the phone number is not empty or just spaces
     $insertPhoneSQL = "INSERT INTO phone_numbers (subscriber_id, phone_number) VALUES (?, ?)";
     $phoneStmt = $conn->prepare($insertPhoneSQL);
     $phoneStmt->bind_param("is", $subscriberId, $mobileNumber);
@@ -277,7 +285,7 @@ if (isset($_POST["AddSubscribersEvent"])) {
                 // Insert the record into the database only if the row is not empty
                 if (!$isEmptyRow) {
                     $fullName = $data[0];
-                    $mobileNumber = trim($data[1]);
+                    $mobileNumber = isset($data[1]) ? cleanPhoneNumber(trim($data[1])) : '';
                     $email = isset($data[2]) ? strtolower(trim($data[2])) : null;
                     $designation = isset($data[3]) ? trim($data[3]) : null;
                     $organization = isset($data[4]) ? trim($data[4]) : null; 
