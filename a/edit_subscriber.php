@@ -549,11 +549,16 @@ div {
 .users-list-name, .users-list-date {
     display: inline;
 }
-
+.select2-container {
+    margin-left: 0 !important;
+}
     /* Change the background color of selected options */
 .select2-selection__choice {
     background-color: #f9e79f !important;  /* Example: Green background */
     color: black !important;  /* White text */
+    border: 1px solid #f9e79f !important;  /* Green border */
+    margin-right: 10px;  /* Adjust the margin as needed */
+    margin-bottom: 5px;  /* Optional: Add space below the options */
 }
 
 /* Optionally, change the hover color of selected options */
@@ -561,9 +566,8 @@ div {
     background-color: #f9e79f !important;  /* Darker green on hover */
 }
 
-/* Change the border color for the selected items */
-.select2-selection__choice {
-    border: 1px solid #f9e79f !important;  /* Green border */
+.select2-selection__rendered {
+    padding-left: 0 !important;
 }
 
 /* Change the background color of the selected option in the dropdown */

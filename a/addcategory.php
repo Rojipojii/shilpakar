@@ -143,7 +143,7 @@ $categories = fetchCategoriesWithAttendees($conn);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Include Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.7.0/dist/css/bootstrap.min.css">
-    <title>Add Category</title>
+    <title>Categories</title>
 </head>
 <body>
     <?php include("header.php"); ?>

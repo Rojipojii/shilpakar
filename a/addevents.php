@@ -53,9 +53,8 @@ function fetchOrganizers($conn)
 // Function to fetch a list of events, their IDs, dates, and attendance in descending order of event date
 $events = getEventList($conn);
 function getEventList($conn) {
-    $sql = "SELECT e.event_id, e.event_name, e.event_date, c.category_name, o.organizer_name 
+    $sql = "SELECT e.event_id, e.event_name, e.event_date, o.organizer_name 
         FROM events e
-        JOIN categories c ON e.category_id = c.category_id
         JOIN organizers o ON e.organizer_id = o.organizer_id
         ORDER BY e.event_date DESC";
     $result = $conn->query($sql);
@@ -131,22 +130,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit"])) {
     // Retrieve form inputs
     $editedEvent = $_POST["editedEventName"];
     $editedDate = $_POST["editedDate"];
-    $editedCategory = $_POST['editedCategoryId'];
     $editedOrganizer = $_POST['editedOrganizerId'];
-
     $eventId = $_POST["eventId"];
 
     // Validate required fields
-    if (!empty($editedEvent) && !empty($editedDate) && !empty($editedOrganizer) && !empty($editedCategory)) {
+    if (!empty($editedEvent) && !empty($editedDate) && !empty($editedOrganizer)) {
         // Update the event in the database
         $sql = "UPDATE events 
-                SET event_name = ?, event_date = ?, organizer_id = ?, category_id = ? 
+                SET event_name = ?, event_date = ?, organizer_id = ?
                 WHERE event_id = ?";
         $stmt = $conn->prepare($sql);
 
         if ($stmt) {
             // Bind parameters to the SQL statement
-            $stmt->bind_param("ssiii", $editedEvent, $editedDate, $editedOrganizer, $editedCategory, $eventId);
+            $stmt->bind_param("ssii", $editedEvent, $editedDate, $editedOrganizer, $eventId);
 
             // Execute the statement
             if ($stmt->execute()) {
@@ -162,7 +159,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit"])) {
         }
     } else {
         // Handle validation errors
-        echo "All fields (event name, date, organizer, and category) are required.";
+        echo "All fields (event name, date, organizer) are required.";
     }
 
     // Exit after handling the update to prevent page reload
@@ -171,38 +168,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit"])) {
 
 
 // Handle the form submission for adding an event
-else if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["eventName"]) && isset($_POST["eventDate"]) && isset($_POST["category"]) && isset($_POST["organizer"])) {
+else if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["eventName"]) && isset($_POST["eventDate"]) && isset($_POST["organizer"])) {
     $eventName = $_POST["eventName"];
     $eventDate = $_POST["eventDate"];
-    $category = $_POST["category"];
     $organizer = $_POST["organizer"];
 
     // Validate the inputs
-    if (empty($eventName) || empty($eventDate) || empty($category) || empty($organizer)) {
+    if (empty($eventName) || empty($eventDate) || empty($organizer)) {
         $eventMessage = "All fields are required, including the event date!";
         // echo "<script>alert('$eventMessage');</script>";
     } else {
         // Insert event data into the database
-        $sql = "INSERT INTO events (event_name, event_date, category_id, organizer_id) VALUES (?, ?, ?, ?)";
+        $sql = "INSERT INTO events (event_name, event_date, organizer_id) VALUES (?, ?, ?)";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             die("Prepare failed: " . $conn->error);
         }
 
         // Bind parameters
-        $stmt->bind_param("ssii", $eventName, $eventDate, $category, $organizer);
+        $stmt->bind_param("ssi", $eventName, $eventDate, $organizer);
         if ($stmt->execute()) {
             // Event added successfully
             $eventMessage = "Event added successfully!";
+            // Redirect to refresh the page and display the updated list
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
         } else {
             $eventMessage = "Error: " . $stmt->error;
-            // echo "<script>alert('$eventMessage');</script>";
         }
 
         // Close the database connection
         $stmt->close();
     }
 }
+
 
 // Fetch categories from the database
 $categories = fetchCategories($conn);
@@ -233,7 +232,6 @@ $organizers = fetchOrganizers($conn);
         <div class="container-fluid" id="eventListContainer">
             <div class="row mb-2">
                 <div class="col-md-8">
-                    <!-- Display the category message -->
                     <div id="eventResponseMessage">
                         <?php
                         if (!empty($eventMessage)) {
@@ -248,7 +246,6 @@ $organizers = fetchOrganizers($conn);
         <tr>
             <th>Event Name</th>
             <th>Event Date</th>
-            <th>Category</th>
             <th>Organizer</th>
             <th>Event Attendees</th>
             <th>Action</th>
@@ -260,7 +257,6 @@ $organizers = fetchOrganizers($conn);
         $eventId = $event["event_id"];
         $eventName = $event["event_name"];
         $eventDate = $event["event_date"];
-        $categoryName = $event["category_name"];
         $organizerName = $event["organizer_name"];
 
         // Calculate the total attendees for the current event
@@ -271,7 +267,7 @@ $organizers = fetchOrganizers($conn);
         echo "<tr>";
         echo "<td>";
         // Make the event name a hyperlink
-        echo '<a href="subscribers.php?event_id=' . $eventId . '" class="event-name" data-event-id="' . $eventId . '"style="text-decoration: underline; color: inherit;" 
+        echo '<a href="subscribers.php?event_id=' . $eventId . '" class="event-name" data-event-id="' . $eventId . '" style="text-decoration: underline; color: inherit;" 
         onmouseover="this.style.textDecoration=\'none\'; this.style.color=\'inherit\';" 
         onmouseout="this.style.textDecoration=\'underline\'; this.style.color=\'inherit\';">' . $eventName . '</a>';
         echo "</td>";
@@ -282,42 +278,33 @@ $organizers = fetchOrganizers($conn);
         echo "<input class='form-control event-date-input' data-event-id='$eventId' type='text' value='$eventDate' style='display: none;'>";
         echo "</td>";
         
-        // Category dropdown - Initially hidden
-        echo "<td>";
-                // Display the current category
-                 echo "<span class='category-name' data-event-id='$eventId'>$categoryName</span>";
-                 echo "<select class='form-control category-dropdown' data-event-id='$eventId' style='display: none;'>";
-
-                 // Sort categories alphabetically by category name
-                 asort($categories);
-                 
-                 foreach ($categories as $categoryId => $categoryName) {
-                     $selected = (isset($event['category_id']) && $categoryId == $event['category_id']) ? 'selected' : '';
-                     echo "<option value='$categoryId' $selected>$categoryName</option>";
-                 }
-                 
-                 echo "</select>";
-                 
-
-        echo "</td>";
         // Organizer dropdown - Initially hidden
         echo "<td>";
         // Display the current organizer
         echo "<span class='organizer-name' data-event-id='$eventId'>$organizerName</span>";
-        echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;'>";
+        
+        // Check if event has attendees
+        if ($totalAttendees > 0) {
+            // Disable the organizer dropdown if event has attendees
+            echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;' disabled>";
+            echo "<option value='$organizerId' selected>$organizerName (Not Editable)</option>";
+        } else {
+            // If no attendees, allow editing
+            echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;'>";
+            echo "<option value='' disabled selected>Select Organizer</option>";
 
-         // Sort categories alphabetically by category name
-         asort($organizers);
+            // Sort organizers alphabetically by organizer name
+            asort($organizers);
 
-        foreach ($organizers as $organizerId => $organizerName) {
-            $selected = (isset($event['organizer_id']) && $organizerId == $event['organizer_id']) ? 'selected' : '';
-            echo "<option value='$organizerId' $selected>$organizerName</option>";
-             // Debugging: Print selected value and its status
+            foreach ($organizers as $organizerId => $organizerName) {
+                $selected = (isset($event['organizer_id']) && $organizerId == $event['organizer_id']) ? 'selected' : '';
+                echo "<option value='$organizerId' $selected>$organizerName</option>";
+            }
         }
-        echo "</select>"; 
+
+        echo "</select>";
         echo "</td>";
 
-        // echo "<td>$organizerName</td>"; // Display organizerzwi
         echo "<td>";
         echo "$totalAttendees ($repeatedAttendees)";
         echo "</td>";
@@ -329,6 +316,7 @@ $organizers = fetchOrganizers($conn);
     }
     ?>
 </tbody>
+
 
 </table>
 
@@ -379,22 +367,6 @@ $organizers = fetchOrganizers($conn);
     </script>
 
 <div class="form-group">
-    <label for="category">Category:</label>
-    <select id="category" name="category" class="form-control" required>
-        <option value="" disabled selected>Select Category</option>
-        <?php
-        // Sort the categories array by their values (category names) in alphabetical order
-        asort($categories);
-
-        // Loop through the sorted categories and display each as an option
-        foreach ($categories as $categoryId => $categoryName) {
-            echo "<option value='$categoryId'>$categoryName</option>";
-        }
-        ?>
-    </select>
-</div>
-
-<div class="form-group">
     <label for="organizer">Organizer:</label>
     <select id="organizer" name="organizer" class="form-control" required>
         <option value="" disabled selected>Select Organizer</option>
@@ -422,37 +394,6 @@ $organizers = fetchOrganizers($conn);
 
 <!-- Handle event editing and saving -->
 <script>
-
- // Function to refresh the event list
- function refreshEventList() {
-        fetch("<?php echo $_SERVER['PHP_SELF']; ?>") // Adjust the URL as needed to the endpoint that fetches the updated event list
-            .then(response => response.text())
-            .then(data => {
-    console.log(data); // Check if this contains the correct HTML for the event list
-    const eventListContainer = document.getElementById("eventListContainer");
-    if (eventListContainer) {
-        eventListContainer.innerHTML = data;
-    }
-})
-            .catch(error => {
-                console.error("Error:", error);
-            });
-    }
-
-    function refreshEventListeners() {
-    const editEventButtons = document.querySelectorAll(".edit-event");
-    const saveEventButtons = document.querySelectorAll(".save-event");
-
-    // Reapply listeners for edit and save buttons
-    editEventButtons.forEach(button => {
-        button.addEventListener("click", handleEditEvent);
-    });
-    saveEventButtons.forEach(button => {
-        button.addEventListener("click", handleSaveEvent);
-    });
-}
-
-
 const editEventButtons = document.querySelectorAll(".edit-event");
 const saveEventButtons = document.querySelectorAll(".save-event");
 
@@ -466,17 +407,9 @@ editEventButtons.forEach(button => {
         const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
         const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
         const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
-        const categoryElement = document.querySelector(`.category-name[data-event-id='${eventId}']`);
-        const categoryDropdown = document.querySelector(`.category-dropdown[data-event-id='${eventId}']`);
         const organizerElement = document.querySelector(`.organizer-name[data-event-id='${eventId}']`);
         const organizerDropdown = document.querySelector(`.organizer-dropdown[data-event-id='${eventId}']`);
         const saveButton = document.querySelector(`.save-event[data-event-id='${eventId}']`);
-
-        // Validate all required elements
-        if (!eventElement || !dateElement || !dateInput || !categoryElement || !categoryDropdown || !organizerElement || !organizerDropdown || !saveButton) {
-            console.error(`Missing required elements for eventId: ${eventId}`);
-            return; // Exit if any element is missing
-        }
 
         // Apply Flatpickr to the date input
         flatpickr(dateInput, {
@@ -490,8 +423,6 @@ editEventButtons.forEach(button => {
         dateElement.style.display = "none";
         dateInput.style.display = "inline";
         dateInput.focus();
-        categoryElement.style.display = "none";
-        categoryDropdown.style.display = "inline";
         organizerElement.style.display = "none";
         organizerDropdown.style.display = "inline";
 
@@ -508,65 +439,74 @@ saveEventButtons.forEach(button => {
 
         const eventId = this.getAttribute("data-event-id");
 
-        // Ensure categoryElement and categoryDropdown are defined
         const eventElement = document.querySelector(`.event-name[data-event-id='${eventId}']`);
         const dateElement = document.querySelector(`.event-date[data-event-id='${eventId}']`);
         const dateInput = document.querySelector(`.event-date-input[data-event-id='${eventId}']`);
-        const categoryDropdown = document.querySelector(`.category-dropdown[data-event-id='${eventId}']`);
         const organizerDropdown = document.querySelector(`.organizer-dropdown[data-event-id='${eventId}']`);
+        const organizerElement = document.querySelector(`.organizer-name[data-event-id='${eventId}']`);
 
-            const updatedEventName = eventElement.textContent.trim();
-            const updatedEventDate = dateInput.value;
-            const updatedCategoryId = categoryDropdown.value;
-            const updatedOrganizerId = organizerDropdown.value;
+        const updatedEventName = eventElement.textContent.trim();
+        const updatedEventDate = dateInput.value;
+        const updatedOrganizerId = organizerDropdown.value;
 
-            // Prepare data for AJAX request
-            const formData = new FormData();
-            formData.append("editedEventName", updatedEventName);
-            formData.append("editedDate", updatedEventDate);
-            formData.append("eventId", eventId);
-            formData.append("editedCategoryId", updatedCategoryId);
-            formData.append("editedOrganizerId", updatedOrganizerId);
-            formData.append("edit", 1);
+        // Prepare data for AJAX request
+        const formData = new FormData();
+        formData.append("editedEventName", updatedEventName);
+        formData.append("editedDate", updatedEventDate);
+        formData.append("eventId", eventId);
+        formData.append("editedOrganizerId", updatedOrganizerId);
+        formData.append("edit", 1);
 
-            fetch("<?php echo $_SERVER['PHP_SELF']; ?>", {
-                method: "POST",
-                body: formData
-            })
-            .then(response => response.text())
-            .then(data => {
-                if (data.includes("Event updated successfully")) {
-                    // Update the category element
-                    eventElement.textContent = updatedEventName;
-                    dateElement.textContent = updatedEventDate;
+        fetch("<?php echo $_SERVER['PHP_SELF']; ?>", {
+            method: "POST",
+            body: formData
+        })
+        .then(response => response.text())
+        .then(data => {
+            if (data.includes("Event updated successfully")) {
+                // Update the event details in the DOM
+                eventElement.textContent = updatedEventName;
+                dateElement.textContent = updatedEventDate;
+                organizerElement.textContent = organizerDropdown.options[organizerDropdown.selectedIndex].text;
 
-                    categoryDropdown.style.display = "none";
-                    categoryElement.style.display = "inline";
-                    categoryElement.textContent = categoryDropdown.options[categoryDropdown.selectedIndex].text;
+                // Hide the input fields and show the text elements
+                organizerDropdown.style.display = "none";
+                organizerElement.style.display = "inline";
+                dateInput.style.display = "none";
+                dateElement.style.display = "inline";
 
-                    organizerDropdown.style.display = "none";
-                    organizerElement.style.display = "inline";
-                    organizerElement.textContent = organizerDropdown.options[organizerDropdown.selectedIndex].text;
+                // Store success message in sessionStorage
+                sessionStorage.setItem('eventUpdateSuccess', 'Event updated successfully');
 
-                    // Display success message
-                    document.getElementById("eventResponseMessage").innerHTML = '<div class="alert alert-success">Event updated successfully</div>';
+                // Reload the page
+                location.reload();
 
-                    // Hide the "Save" button and show the "Edit" button
-                    button.style.display = "none";
-                    document.querySelector(`.edit-event[data-event-id='${eventId}']`).style.display = "inline";
-
-                    // Refresh the page
-                    refreshEventList();
-                    refreshEventListeners();  // This will reload the page and reflect the updated event
-                } else {
-                    alert("Failed to update event: " + data);
-                }
-            })
-            .catch(error => {
-                console.error("Error:", error);
-            });
+                // Toggle buttons
+                this.style.display = "none";
+                document.querySelector(`.edit-event[data-event-id='${eventId}']`).style.display = "inline";
+            } else {
+                document.getElementById("eventResponseMessage").innerHTML = `<div class="alert alert-warning">Failed to update event: ${data} </div>`;
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
     });
 });
+
+// After the page reloads, check if there's a success message in sessionStorage
+window.onload = function() {
+    var successMessage = sessionStorage.getItem('eventUpdateSuccess');
+    if (successMessage) {
+        // Display the success message
+        document.getElementById("eventResponseMessage").innerHTML = '<div class="alert alert-success">' + successMessage + '</div>';
+
+        // Clear the message from sessionStorage after showing it
+        sessionStorage.removeItem('eventUpdateSuccess');
+    }
+};
+
+
 </script>
 
 <!-- Activate Events based on current date -->
