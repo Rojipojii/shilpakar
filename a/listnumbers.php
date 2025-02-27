@@ -9,6 +9,9 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
+// Set the session variable before redirecting to the page
+$_SESSION['from_list_phonenumbers'] = true;
+
 // Include the database connection file
 require_once "db.php";
 

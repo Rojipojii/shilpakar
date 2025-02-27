@@ -1,0 +1,170 @@
+/* Reset some default styles */
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+body, .nav-item a, .brand-text, .content-wrapper {
+    font-style: normal !important;
+}
+
+/* Wrapper to contain sidebar and content */
+.wrapper {
+    display: flex;
+    width: 100%;
+}
+
+/* Sidebar styles */
+.main-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 250px; /* Adjust width */
+    height: 100vh; /* Full height */
+    background-color: #343a40;
+    color: white;
+    padding-top: 20px;
+    overflow-y: auto; /* Scroll if needed */
+    transition: width 0.3s ease-in-out;
+}
+
+/* Sidebar links */
+.nav-item a {
+    color: white;
+    padding: 10px 15px;
+    display: block;
+    text-decoration: none;
+    font-style: normal !important;  /* Ensuring the text is not italicized */
+    font-weight: normal;
+}
+.nav-item a i {
+    font-style: normal !important;
+}
+
+/* Content Wrapper */
+.content-wrapper {
+    margin-left: 250px;
+    padding: 20px;
+    background: #f8f9fa;
+    min-height: 100vh;
+    width: calc(100% - 250px);
+    transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Sidebar Toggle Button */
+.menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: #23272b;
+}
+
+.menu-toggle {
+    font-size: 24px;
+    color: white;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+/* Close Button */
+.close-btn {
+    font-size: 24px;
+    cursor: pointer;
+    display: none; /* Initially hidden */
+    color: white;
+    position: absolute;
+    right: 15px;
+}
+
+.sidebar-collapsed .main-sidebar {
+    width: 60px;
+}
+
+.sidebar-collapsed .content-wrapper {
+    margin-left: 60px;
+}
+
+.topbar {
+    position: fixed;
+    top: 10px;
+    left: 50%;               /* Centers the topbar horizontally */
+    transform: translateX(-50%); /* Adjusts the position to truly center it */
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    background: #fff;
+    padding: 5px 10px;
+    border-radius: 5px;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+#searchInput {
+    padding: 5px 10px;
+    display: block;
+    border: 1px solid #ccc;
+    width: 200px;
+    outline: none;
+    visibility: visible !important;
+}
+
+#searchResults {
+    position: fixed; 
+    top: 50px;
+    left: 50%;               /* Centers the results horizontally */
+    transform: translateX(-50%); /* Adjusts the position to truly center it */
+    width: 300px;
+    background: white;
+    color: black;
+    border: 1px solid #ccc;
+    display: none;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 99999; 
+}
+
+.search-results {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.search-results li {
+    padding: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid #ddd;
+}
+
+
+
+/* Responsive Sidebar for Small Screens */
+@media (max-width: 768px) {
+    .main-sidebar {
+        display: none; /* Initially hidden */
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        height: 100vh;
+        background-color: #343a40;
+    }
+
+    .content-wrapper {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .menu-toggle {
+        display: block; 
+    }
+
+    .main-sidebar.active {
+        display: block;
+    }
+
+    .close-btn {
+        display: block;
+    }
+}

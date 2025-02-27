@@ -12,130 +12,64 @@ if (!isset($_SESSION['id'])) {
 
 require_once "db.php"; // Include the database connection file
 
-// Function to search for records based on the search query
-function searchInDatabase($conn, $searchQuery) {
-    $sql = "SELECT * FROM subscribers WHERE
-            full_name LIKE ? OR
-            mobile_number LIKE ? OR
-            email LIKE ? OR
-            designation LIKE ? OR
-            organization LIKE ?";
-    $searchParam = "%" . $searchQuery . "%";
+if (isset($_GET['query'])) {
+    $searchQuery = trim($_GET['query']); 
+    $searchQuery = "%$searchQuery%"; // For SQL LIKE
+
+    // Prepare the SQL query
+    $sql = "SELECT s.subscriber_id, s.full_name, d.designation, d.organization, 
+                   GROUP_CONCAT(DISTINCT e.email SEPARATOR ', ') AS emails, 
+                   GROUP_CONCAT(DISTINCT p.phone_number SEPARATOR ', ') AS phone_numbers
+            FROM subscribers s
+            LEFT JOIN designation_organization d ON s.subscriber_id = d.subscriber_id
+            LEFT JOIN emails e ON s.subscriber_id = e.subscriber_id
+            LEFT JOIN phone_numbers p ON s.subscriber_id = p.subscriber_id
+            WHERE s.full_name LIKE ? 
+               OR d.designation LIKE ? 
+               OR d.organization LIKE ? 
+               OR e.email LIKE ? 
+               OR p.phone_number LIKE ? 
+            GROUP BY s.subscriber_id";
+
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssss", $searchParam, $searchParam, $searchParam, $searchParam, $searchParam);
-    $stmt->execute();
-    return $stmt->get_result();
-}
+    $stmt->bind_param("sssss", $searchQuery, $searchQuery, $searchQuery, $searchQuery, $searchQuery); // Bind parameters
 
-// Define a function to generate and deliver VCF file for a given subscriber ID
-function generateVCF($conn, $subscriberID) {
-    $sql = "SELECT * FROM subscribers WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $subscriberID);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($result->num_rows > 0) {
-        $subscriber = $result->fetch_assoc();
-        // Build VCF content
-        $vcfContent = "BEGIN:VCARD\r\n";
-        $vcfContent .= "VERSION:3.0\r\n";
-        $vcfContent .= "FN:" . $subscriber['full_name'] . "\r\n";
-        $vcfContent .= "TEL:" . $subscriber['mobile_number'] . "\r\n";
-        $vcfContent .= "EMAIL:" . $subscriber['email'] . "\r\n";
-        if (!empty($subscriber['organization'])) {
-            $vcfContent .= "ORG:" . $subscriber['organization'] . "\r\n"; // Add organization if not empty
-        }
-        $vcfContent .= "END:VCARD\r\n";
-
-        // Send appropriate headers for download
-        header("Content-Type: text/vcard");
-        header("Content-Disposition: attachment; filename=" . $subscriber['full_name'] . ".vcf");
-        echo $vcfContent;
-        exit;
-    }
-}
-
-
-// Handle search query if it's present in the URL
-if (isset($_GET["search"])) {
-    $searchQuery = $_GET["search"];
-    $result = searchInDatabase($conn, $searchQuery);
-} else {
-    $result = false;
-}
-
-// Handle the download action if "id" parameter is present in the URL
-if (isset($_GET["id"])) {
-    $subscriberID = $_GET["id"];
-    generateVCF($conn, $subscriberID);
-}
-
-// Display the search form
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Search Results</title>
-
-    <!-- Include Bootstrap CSS from a CDN -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.7.0/dist/css/bootstrap.min.css">
-
-    <style>
-        .business-card {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 10px;
-        }
-
-        .business-card p {
-            margin: 5px 0;
-        }
-
-        .download-link {
-            display: block;
-            text-align: right;
-        }
-    </style>
-</head>
-<body>
-
-<?php include("header.php"); ?>
-
-<div class="container-fluid mt-5">
-    <h1 class="mb-4">Search Results</h1>
-
-    <?php
-    if ($result) {
-        if ($result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-                // Display the search result in a Bootstrap card
-                echo '<div class="card business-card">';
-                echo '<div class="card-body">';
-                echo '<h5 class="card-title">' . $row['full_name'] . '</h5>';
-                echo '<p class="card-text">' . $row['mobile_number'] . '</p>';
-                echo '<p class="card-text">' . $row['email'] . '</p>';
-                echo '<p class="card-text">' . $row['designation'] . '</p>';
-
-                // Display "Organization" even if the field is empty
-                echo '<p class="card-text">' . (!empty($row['organization']) ? $row['organization'] : '') . '</p>';
-
-                // Add a download link for .vcf format
-                echo '<a class="download-link" href="search.php?id=' . $row['id'] . '">Download VCF</a>';
-                
-                echo '</div>';
-                echo '</div>';
-            }
+    if ($stmt->execute()) {         
+        $result = $stmt->get_result(); // Fetch results         
+        if ($result->num_rows > 0) {             
+            echo "<p><strong>" . $result->num_rows . " result(s) found</strong></p>";             
+            echo "<ul class='search-results'>";             
+            while ($row = $result->fetch_assoc()) {                 
+                echo "<li onclick=\"redirectToEdit({$row['subscriber_id']})\">";                 
+                echo "<strong>{$row['full_name']}</strong><br>";
+    
+                // Check if designation or organization are not empty and only show them if they exist
+                if (!empty($row['designation']) || !empty($row['organization'])) {
+                    echo "<small>";
+                    if (!empty($row['designation'])) {
+                        echo "{$row['designation']}";
+                    }
+                    if (!empty($row['organization'])) {
+                        if (!empty($row['designation'])) {
+                            echo " at "; // Add "at" only if designation exists
+                        }
+                        echo "{$row['organization']}";
+                    }
+                    echo "</small><br>";
+                }
+    
+                // Display the emails and phone numbers as usual
+                echo "<small>{$row['emails']}</small><br>";                 
+                echo "<small>{$row['phone_numbers']}</small><br>";                 
+                echo "</li>";             
+            }             
+            echo "</ul>";         
         } else {
-            echo '<p class="mt-3">No records found.</p>';
+            echo "<p>No results found.</p>";
         }
     }
-    ?>
-</div>
-
-<!-- Include Bootstrap JavaScript from a CDN if needed -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.7.0/dist/js/bootstrap.min.js"></script>
-</body>
-</html>
-
+     else {
+        echo "<p>Error executing search</p>";
+    }
+}
+?>

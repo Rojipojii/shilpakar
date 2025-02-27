@@ -21,7 +21,9 @@ function fetchData($conn) {
         SELECT 
             s.*, 
             GROUP_CONCAT(DISTINCT do.organization ORDER BY do.organization SEPARATOR ', ') AS organizations,
-            GROUP_CONCAT(DISTINCT do.designation ORDER BY do.designation SEPARATOR ', ') AS designations
+            GROUP_CONCAT(DISTINCT do.designation ORDER BY do.designation SEPARATOR ', ') AS designations,
+            GROUP_CONCAT(DISTINCT e.email ORDER BY e.email SEPARATOR ', ') AS emails,  -- Ensure unique emails
+            GROUP_CONCAT(DISTINCT p.phone_number ORDER BY p.phone_number SEPARATOR ', ') AS phone_numbers -- Ensure unique phone numbers
         FROM 
             subscribers s
         INNER JOIN emails e ON s.subscriber_id = e.subscriber_id
@@ -37,6 +39,7 @@ function fetchData($conn) {
     $result = $conn->query($sql);
     return $result;
 }
+
 
 
 function getEmails($conn, $subscriberId) {
@@ -78,26 +81,33 @@ function getOrganizations($conn, $subscriberId) {
 }
 
 
-// Function to generate vCard data
 function generateVCard($row, $emails, $phoneNumbers, $organizations, $designations) {
     $vcard = "BEGIN:VCARD\r\n";
     $vcard .= "VERSION:3.0\r\n";
     $vcard .= "FN:" . $row["full_name"] . "\r\n";
 
-    // Add all phone numbers to the vCard
-    foreach ($phoneNumbers as $phone) {
+    // Remove duplicate phone numbers and add them to the vCard
+    $uniquePhoneNumbers = array_unique(array_map(function($phone) {
+        return $phone['phone_number']; // Assuming the result is an associative array with 'phone_number' as the key
+    }, $phoneNumbers));
+    
+    foreach ($uniquePhoneNumbers as $phone) {
         $vcard .= "TEL:" . $phone . "\r\n";
     }
 
-    // Add all email addresses to the vCard
-    foreach ($emails as $email) {
+    // Remove duplicate emails and add them to the vCard
+    $uniqueEmails = array_unique(array_map(function($email) {
+        return $email['email']; // Assuming the result is an associative array with 'email' as the key
+    }, $emails));
+
+    foreach ($uniqueEmails as $email) {
         $vcard .= "EMAIL:" . $email . "\r\n";
     }
 
     // Add all organizations to the vCard
     if (!empty($organizations)) {
         foreach ($organizations as $organization) {
-            $vcard .= "ORG:" . $organization . "\r\n";
+            $vcard .= "ORG:" . $organization['organization'] . "\r\n"; // Assuming the result is an associative array with 'organization' as the key
         }
     } else {
         $vcard .= "ORG:;\r\n"; // Set "ORG" to null if no organizations
@@ -106,7 +116,7 @@ function generateVCard($row, $emails, $phoneNumbers, $organizations, $designatio
     // Add all designations to the vCard
     if (!empty($designations)) {
         foreach ($designations as $designation) {
-            $vcard .= "TITLE:" . $designation . "\r\n";
+            $vcard .= "TITLE:" . $designation['designation'] . "\r\n"; // Assuming the result is an associative array with 'designation' as the key
         }
     } else {
         $vcard .= "TITLE:;\r\n"; // Set "TITLE" to null if no designations
@@ -115,6 +125,7 @@ function generateVCard($row, $emails, $phoneNumbers, $organizations, $designatio
     $vcard .= "END:VCARD\r\n";
     return $vcard;
 }
+
 
 // Handle download format selection
 if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'xlsx' || $_GET['format'] == 'vcf')) {
@@ -149,11 +160,11 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
             $designations = array_unique($designations);
             $organizations = array_unique($organizations);
     
-            // Combine values into a comma-separated string
-            $emailString = implode(", ", $emails);
-            $phoneNumberString = implode(", ", $phoneNumbers);
-            $designationString = implode(", ", $designations);
-            $organizationString = implode(", ", $organizations);
+            // Create comma-separated strings, avoiding commas before empty values
+        $emailString = implode(", ", array_filter(array_map('trim', $emails)));
+        $phoneNumberString = implode(", ", array_filter(array_map('trim', $phoneNumbers)));
+        $designationString = implode(", ", array_filter(array_map('trim', $designations)));
+        $organizationString = implode(", ", array_filter(array_map('trim', $organizations)));
     
             // Write data to the CSV
             fputcsv($output, [
@@ -194,11 +205,11 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
             $designations = array_unique($designations);
             $organizations = array_unique($organizations);
     
-            // Combine values into a comma-separated string
-            $emailString = implode(", ", $emails);
-            $phoneNumberString = implode(", ", $phoneNumbers);
-            $designationString = implode(", ", $designations);
-            $organizationString = implode(", ", $organizations);
+            // Create comma-separated strings, avoiding commas before empty values
+        $emailString = implode(", ", array_filter(array_map('trim', $emails)));
+        $phoneNumberString = implode(", ", array_filter(array_map('trim', $phoneNumbers)));
+        $designationString = implode(", ", array_filter(array_map('trim', $designations)));
+        $organizationString = implode(", ", array_filter(array_map('trim', $organizations)));
     
             // Prepare row data
             $data = [
@@ -243,34 +254,57 @@ if (isset($_GET['format']) && ($_GET['format'] == 'csv' || $_GET['format'] == 'x
             $designations = array_column(getDesignations($conn, $row['subscriber_id']), 'designation');
             $organizations = array_column(getOrganizations($conn, $row['subscriber_id']), 'organization');
 
+
+             // Remove duplicates from emails and phone numbers
+        $emails = array_unique($emails);
+        $phoneNumbers = array_unique($phoneNumbers);
+        $designations = array_unique($designations);
+        $organizations = array_unique($organizations);
+
             // Generate vCard data
             $vcard = "BEGIN:VCARD\r\n";
             $vcard .= "VERSION:3.0\r\n";
             $vcard .= "FN:" . $row["full_name"] . "\r\n";
 
-            // Add phone numbers
+            // Add phone numbers (only if available and not empty or whitespace)
+        if (!empty($phoneNumbers)) {
             foreach ($phoneNumbers as $phone) {
-                $vcard .= "TEL:" . $phone . "\r\n";
+                $phone = trim($phone); // Remove leading and trailing whitespace
+                if (!empty($phone)) { // Check if phone is not empty after trimming
+                    $vcard .= "TEL:" . $phone . "\r\n";
+                }
             }
+        }
 
-            // Add emails
+        // Add emails (only if available and not empty or whitespace)
+        if (!empty($emails)) {
             foreach ($emails as $email) {
-                $vcard .= "EMAIL:" . $email . "\r\n";
+                $email = trim($email); // Remove leading and trailing whitespace
+                if (!empty($email)) { // Check if email is not empty after trimming
+                    $vcard .= "EMAIL:" . $email . "\r\n";
+                }
             }
+        }
 
-            // Add organizations
-            if (!empty($organizations)) {
-                foreach ($organizations as $organization) {
+        // Add organizations (only if available and not empty or whitespace)
+        if (!empty($organizations)) {
+            foreach ($organizations as $organization) {
+                $organization = trim($organization); // Remove leading and trailing whitespace
+                if (!empty($organization)) { // Check if organization is not empty after trimming
                     $vcard .= "ORG:" . $organization . "\r\n";
                 }
-            } else {
-                $vcard .= "ORG:;\r\n";
             }
+        }
 
-            // Add designations
+        // Add designations (only if available and not empty or whitespace)
+        if (!empty($designations)) {
             foreach ($designations as $designation) {
-                $vcard .= "TITLE:" . $designation . "\r\n";
+                $designation = trim($designation); // Remove leading and trailing whitespace
+                if (!empty($designation)) { // Check if designation is not empty after trimming
+                    $vcard .= "TITLE:" . $designation . "\r\n";
+                }
             }
+        }
 
             $vcard .= "END:VCARD\r\n";
 

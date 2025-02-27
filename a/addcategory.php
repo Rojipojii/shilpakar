@@ -7,42 +7,55 @@ session_start();
 if (!isset($_SESSION['id'])) {
     // If the user is not logged in, redirect to the login page with a message
     header("Location: index.php?message=You should login first");
-    echo "<script>alert('You should login first');</script>";
     exit();
 }
 
 require_once "db.php"; // Include the database connection file
-require_once "mergeGroups.php"; // Include the function file
 
-// Get the total number of groups to merge
-$totalGroupsToMerge = getGroupsToMerge($conn);
+// function fetchCategoriesWithAttendees($conn)
+// {
+//     $sql = "SELECT 
+//         categories.category_id, 
+//         categories.category_name, 
+//         (
+//             SELECT COUNT(*) 
+//             FROM event_subscriber_mapping 
+//             WHERE event_subscriber_mapping.category_id = categories.category_id
+//         ) AS total_attendees
+//     FROM 
+//         categories
+//     GROUP BY 
+//         categories.category_id, categories.category_name;
+//     ";
 
-// Store the result in session
-$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
+//     $result = $conn->query($sql);
 
-// Function to fetch Categories and their total number of attendees from the database
+//     $categories = array();
+//     if ($result->num_rows > 0) {
+//         while ($row = $result->fetch_assoc()) {
+//             $categories[] = $row;
+//         }
+//     }
+
+//     return $categories;
+// }
+
 function fetchCategoriesWithAttendees($conn)
 {
     $sql = "SELECT 
-    categories.category_id, 
-    categories.category_name, 
-    COUNT(DISTINCT events.event_id) AS total_events,
-    (
-        SELECT COUNT(*) 
-        FROM event_subscriber_mapping 
-        WHERE categories.category_id = event_subscriber_mapping.category_id
-    ) AS total_attendees
-FROM 
-    categories
-LEFT JOIN 
-    events ON categories.category_id = events.category_id
-GROUP BY 
-    categories.category_id, categories.category_name;
-";
+        c.category_id, 
+        c.category_name, 
+        COUNT(es.category_id) AS total_attendees
+    FROM 
+        categories c
+    LEFT JOIN 
+        event_subscriber_mapping es ON c.category_id = es.category_id
+    GROUP BY 
+        c.category_id, c.category_name";
 
     $result = $conn->query($sql);
+    $categories = [];
 
-    $categories= array();
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
             $categories[] = $row;
@@ -142,7 +155,8 @@ $categories = fetchCategoriesWithAttendees($conn);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Include Bootstrap CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.7.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
     <title>Categories</title>
 </head>
 <body>
@@ -182,7 +196,6 @@ $categories = fetchCategoriesWithAttendees($conn);
                 <tr>
                     <th>Category Name</th>
                     <th>Total Attendees</th>
-                    <th>Total Events</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -197,7 +210,6 @@ $categories = fetchCategoriesWithAttendees($conn);
         $categoryId = $category["category_id"];
         $categoryName = $category["category_name"];
         $fetchCategoriesWithAttendees = $category["total_attendees"];
-        $totalEvents = $category["total_events"];
 
         echo "<tr>";
         echo "<td>";
@@ -211,7 +223,6 @@ $categories = fetchCategoriesWithAttendees($conn);
         // Display attendees count without a hyperlink
         echo "$fetchCategoriesWithAttendees";
         echo "</td>";
-        echo "<td>$totalEvents</td>";
         echo "<td>";
         echo "<button class='edit-category btn btn-outline-primary' data-category-id='$categoryId'><i class='bi bi-pencil-square'></i></button>";
         echo "<button class='save-category btn btn-outline-success' data-category-id='$categoryId' style='display: none;'><i class='bi bi-check2-square'></i></button>";

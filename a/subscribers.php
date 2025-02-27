@@ -13,12 +13,7 @@ if (!isset($_SESSION['id'])) {
 
 require_once "db.php"; // Include the database connection file
 
-// Check if the 'merge_success' parameter is in the URL
-if (isset($_GET['merge_success']) && $_GET['merge_success'] == 1) {
-    $organizerMessage = "Subscribers merged successfully!";
-} else {
-    $organizerMessage = "";
-}
+
 
 // Initialize the serial number
 $serialNumber = 1;
@@ -133,138 +128,6 @@ if (isset($_GET["id"])) {
     if (is_numeric($subscriberID)) {
         fetchSubscriberContacts($conn, $subscriberID);
         generateVCF($conn, $subscriberID, $uniquePhoneNumbers, $uniqueEmails);
-    }
-}
-
-// Function to fetch subscribers with matching phone numbers or emails
-function fetchMatchingContacts($conn) {
-    $sql = "
-        SELECT 
-            t1.subscriber_id AS subscriber1_id, 
-            t2.subscriber_id AS subscriber2_id,
-            t1.phone_number AS matching_phone, 
-            t1.email AS matching_email
-        FROM (
-            SELECT subscriber_id, phone_number, email
-            FROM (
-                SELECT subscriber_id, phone_number, NULL AS email
-                FROM phone_numbers
-                UNION ALL
-                SELECT subscriber_id, NULL AS phone_number, email
-                FROM emails
-            ) AS combined
-        ) t1
-        JOIN (
-            SELECT subscriber_id, phone_number, email
-            FROM (
-                SELECT subscriber_id, phone_number, NULL AS email
-                FROM phone_numbers
-                UNION ALL
-                SELECT subscriber_id, NULL AS phone_number, email
-                FROM emails
-            ) AS combined
-        ) t2
-        ON (t1.phone_number = t2.phone_number OR t1.email = t2.email)
-        AND t1.subscriber_id <> t2.subscriber_id
-        GROUP BY t1.subscriber_id, t2.subscriber_id, t1.phone_number, t1.email
-    ";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $matches = [];
-    while ($row = $result->fetch_assoc()) {
-        $matches[] = $row;
-    }
-
-    return $matches;
-}
-
-// Handle record deletion
-if (isset($_GET["delete"]) && is_numeric($_GET["delete"])) {
-    $deleteID = $_GET["delete"];
-    
-    // Check if the user confirmed the deletion
-    if (isset($_GET["confirm"]) && $_GET["confirm"] === "yes") {
-        // Begin transaction to ensure all deletions are handled atomically
-        $conn->begin_transaction();
-        
-        try {
-            // Delete the record from the event_subscriber_mapping table
-            $deleteMappingSQL = "DELETE FROM event_subscriber_mapping WHERE subscriber_id = ?";
-            $deleteMappingStmt = $conn->prepare($deleteMappingSQL);
-            if ($deleteMappingStmt === false) {
-                throw new Exception("Error preparing delete statement for event_subscriber_mapping: " . $conn->error);
-            }
-            $deleteMappingStmt->bind_param("i", $deleteID);
-            if (!$deleteMappingStmt->execute()) {
-                throw new Exception("Error executing delete statement for event_subscriber_mapping: " . $deleteMappingStmt->error);
-            }
-
-            // Delete the subscriber's email from the emails table
-            $deleteEmailSQL = "DELETE FROM emails WHERE subscriber_id = ?";
-            $deleteEmailStmt = $conn->prepare($deleteEmailSQL);
-            if ($deleteEmailStmt === false) {
-                throw new Exception("Error preparing delete statement for emails: " . $conn->error);
-            }
-            $deleteEmailStmt->bind_param("i", $deleteID);
-            if (!$deleteEmailStmt->execute()) {
-                throw new Exception("Error executing delete statement for emails: " . $deleteEmailStmt->error);
-            }
-
-            // Delete the subscriber's phone number from the phone_numbers table
-            $deletePhoneSQL = "DELETE FROM phone_numbers WHERE subscriber_id = ?";
-            $deletePhoneStmt = $conn->prepare($deletePhoneSQL);
-            if ($deletePhoneStmt === false) {
-                throw new Exception("Error preparing delete statement for phone_numbers: " . $conn->error);
-            }
-            $deletePhoneStmt->bind_param("i", $deleteID);
-            if (!$deletePhoneStmt->execute()) {
-                throw new Exception("Error executing delete statement for phone_numbers: " . $deletePhoneStmt->error);
-            }
-
-            // Finally, delete the subscriber from the subscribers table
-            $deleteSubscriberSQL = "DELETE FROM subscribers WHERE subscriber_id = ?";
-            $deleteSubscriberStmt = $conn->prepare($deleteSubscriberSQL);
-            if ($deleteSubscriberStmt === false) {
-                throw new Exception("Error preparing delete statement for subscribers: " . $conn->error);
-            }
-            $deleteSubscriberStmt->bind_param("i", $deleteID);
-            if (!$deleteSubscriberStmt->execute()) {
-                throw new Exception("Error executing delete statement for subscribers: " . $deleteSubscriberStmt->error);
-            }
-
-            // Commit the transaction if all queries were successful
-            $conn->commit();
-
-            // Use AJAX to refresh the table without a full page reload
-            echo "<script>
-            alert('Record deleted successfully.');
-            </script>";
-            exit();
-        } catch (Exception $e) {
-            // Rollback the transaction if something goes wrong
-            $conn->rollback();
-            die("Error executing delete statement: " . $e->getMessage());
-        }
-    } else {  
-        // Prompt the user for confirmation before deleting
-        echo "<script>
-                var confirmDelete = confirm('Are you sure you want to delete this record?');
-                if (confirmDelete) {
-                    // Use AJAX to perform the delete action
-                    var xhr = new XMLHttpRequest();
-                    xhr.onreadystatechange = function() {
-                        if (xhr.readyState === 4 && xhr.status === 200) {
-                            alert('Record deleted successfully.');
-                            location.reload();  
-                        }
-                    };
-                    xhr.open('GET', 'subscribers.php?delete=" . $deleteID . "&confirm=yes', true);
-                    xhr.send();
-                }
-              </script>";
     }
 }
 
@@ -397,6 +260,12 @@ $result = $stmt->get_result();
       <!-- Content Wrapper. Contains page content -->
       <div class="content-wrapper">
       <div class="container-fluid">
+      <?php
+if (isset($_GET["addedCount"]) && is_numeric($_GET["addedCount"])) {
+    $addedCount = (int) $_GET["addedCount"];
+    echo "<div class='alert alert-success'>Successfully added {$addedCount} contacts.</div>";
+}
+?>
 
       <?php
 // Display event details if available
@@ -460,21 +329,6 @@ if (isset($organizerResult) && $organizerResult !== null && $organizerResult->nu
               <div class="card-header">
               </div>
               <div class="card-body">
-
-              <?php
-// Fetch matching contacts
-$matchingContacts = fetchMatchingContacts($conn);
-$matchedSubscribers = [];
-
-// Process matching contacts to build an array of subscriber IDs with matches
-foreach ($matchingContacts as $match) {
-    $matchedSubscribers[] = $match['subscriber1_id'];
-    $matchedSubscribers[] = $match['subscriber2_id'];
-}
-
-// Ensure the list of matched subscribers is unique
-$matchedSubscribers = array_unique($matchedSubscribers);
-?>
 <div id="error-message" class="error-box" style="display: none;"></div>
 
 
@@ -483,14 +337,13 @@ $matchedSubscribers = array_unique($matchedSubscribers);
                 <thead>
         <tr>
             <!-- <th>Serial Number</th> -->
-            <th>Select</th>
+            <th></th>
             <th>Name</th>
             <th>Phone</th>
             <th>Email</th>
             <th>Designation</th>
             <th>Organization</th>
             <th>Events</th>
-            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -503,14 +356,73 @@ if ($result->num_rows > 0) {
         echo "<script>document.getElementById('row_" . $row["subscriber_id"] . "');</script>";
           
         // Select box for merge
-        echo '<td style="text-align: center; vertical-align: top;">
+        echo '<td style="text-align:right; vertical-align: top; display: flex;">
         <input class="form-check-input subscriber-checkbox" type="checkbox" value="' . htmlspecialchars($row["subscriber_id"]) . '">
       </td>';
 
+    echo "<td>";
 
-        // Display full name
-        echo "<td>" . ($row["full_name"] ? $row["full_name"] : '') . "</td>";
+    // Determine what text to display in priority order
+    $displayText = '';
 
+    // Fetch the correct designation, organization, and email for the specific subscriber
+    $organization = '';
+    $designation = '';
+    $email = '';
+    
+    // Fetch organization and designation for this subscriber
+    $sqlDesignationOrganization = "SELECT designation, organization FROM designation_organization WHERE subscriber_id = ?";
+    $stmtDesignationOrganization = $conn->prepare($sqlDesignationOrganization);
+    $stmtDesignationOrganization->bind_param("i", $row["subscriber_id"]);
+    $stmtDesignationOrganization->execute();
+    $resultDesignationOrganization = $stmtDesignationOrganization->get_result();
+    
+    // If there are multiple records, get the first available value
+    while ($data = $resultDesignationOrganization->fetch_assoc()) {
+        if (!$organization && !empty($data['organization'])) {
+            $organization = $data['organization'];
+        }
+        if (!$designation && !empty($data['designation'])) {
+            $designation = $data['designation'];
+        }
+    }
+    
+    // Fetch email for this subscriber
+    $sqlEmail = "SELECT email FROM emails WHERE subscriber_id = ? LIMIT 1"; // Get only one email
+    $stmtEmail = $conn->prepare($sqlEmail);
+    $stmtEmail->bind_param("i", $row["subscriber_id"]);
+    $stmtEmail->execute();
+    $resultEmail = $stmtEmail->get_result();
+    
+    if ($emailData = $resultEmail->fetch_assoc()) {
+        $email = strtolower(trim($emailData['email'])); // Normalize email
+    }
+    
+    // Determine the highest-priority value to display
+    if (!empty($row["full_name"])) {
+        $displayText = htmlspecialchars($row["full_name"]);
+    } elseif (!empty($organization)) {
+        $displayText = htmlspecialchars($organization);
+    } elseif (!empty($designation)) {
+        $displayText = htmlspecialchars($designation);
+    } elseif (!empty($email)) {
+        $displayText = htmlspecialchars($email);
+    } else {
+        $displayText = '&mdash;'; // If nothing exists, display a placeholder
+    }
+    
+    // Make the selected text clickable (link to the edit page)
+    echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' 
+             style='text-decoration: underline; color: inherit;' 
+             onmouseover='this.style.textDecoration=\"none\"; this.style.color=\"inherit\";' 
+             onmouseout='this.style.textDecoration=\"underline\"; this.style.color=\"inherit\";'>
+             " . $displayText . "
+          </a>";
+    
+    echo "</td>";
+    
+    
+    
         // Fetch the phone numbers and emails
         $phoneNumber = !empty($row["phone_number"]) ? $row["phone_number"] : '';
         $email = !empty($row["email"]) ? $row["email"] : '';
@@ -584,14 +496,14 @@ if (!empty($emails)) {
     foreach ($emails as $emailData) {
         // Display the email address
         $email = htmlspecialchars($emailData['email']);  // Safely handle special characters
-        echo $email . "<br>";
+        echo $email . ' ';
 
         // Check the email visibility for each email
         $emailHidden = $emailData['hidden'];
 
         // Display the toggle button based on the current visibility
-        $buttonText = $emailHidden == 1 ? 'full' : 'not';
-        $buttonClass = $emailHidden == 1 ? 'btn-outline-primary' : 'btn-outline-secondary';
+        $buttonText = $emailHidden == 1 ? '<i class="bi bi-envelope-x " title="Mailbox Full"></i>' : '<i class="bi bi-envelope-x" title="Mailbox Full"></i>';
+        $buttonClass = $emailHidden == 1 ? 'btn-outline-danger' : 'btn-outline-secondary';
         
         // Generate the button with unique ID and email as the parameter
         echo "<button id='emailToggleBtn_" . $email . "' class='btn $buttonClass btn-sm' onclick='toggleEmailVisibility(\"$email\")'>$buttonText</button><br>";
@@ -671,14 +583,6 @@ while ($stmt->fetch()) {
 }
 $stmt->close();
 
-// echo "User ID: " . $userId; // Debugging line
-
-// // Output the contents of the $userOrganizers array to see what has been fetched
-// echo "<pre>";
-// print_r($userOrganizers); // This will print the array of organizer IDs
-// echo "</pre>";
-
-
 
 // Get the subscriber's organizer ID from the event_subscriber_mapping table
 $subscriberId = $row['subscriber_id']; // Assuming you have this from your subscriber data
@@ -700,29 +604,6 @@ if ($stmt->fetch()) {
 }
 $stmt->close();       
 
-
-        // Actions
-echo "<td>";
-if ($role == 'user' && in_array((int)$subscriberOrganizerId, array_map('intval', $userOrganizers))) {
-    // Only display the Edit button if the role is not 'user' and the user is affiliated with the same organizer
-    echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a>";
-}elseif($role == 'admin'){
-    // Only display the Edit button if the role is not 'user' and the user is affiliated with the same organizer
-    echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a>";
-}
-// echo "<a href='edit_subscriber.php?id=" . $row["subscriber_id"] . "' class='btn btn-outline-primary btn-sm' title='Edit'><i class='bi bi-pencil-square'></i></a> ";
-echo "<a href='javascript:void(0);' onclick='deleteRecord(" . $row["subscriber_id"] . ")' class='btn btn-outline-danger btn-sm' title='Delete'><i class='bi bi-trash3'></i></a> ";
-echo "<a href='subscribers.php?id=" . $row['subscriber_id'] . "' class='btn btn-outline-success btn-sm'><i class='bi bi-download' title='Download Vcard'></i></a>";
-
-
-
-         // Check if the subscriber is in the matched list
-if (in_array($row["subscriber_id"], $matchedSubscribers)) {
-    echo " <button class='btn btn-outline-primary btn-sm'title='Merge' onclick='window.location.href=\"merge.php?subscriber_id=" . $row["subscriber_id"] . "\"'> <i class='bi bi-intersect'></i></button>";
-}
-
-         echo "</td>";
-
         echo "</tr>";
     }
 } else {
@@ -741,25 +622,6 @@ if (in_array($row["subscriber_id"], $matchedSubscribers)) {
   <!-- /.control-sidebar -->
 </div>
 <!-- ./wrapper -->
-
- <!-- for deleting  -->
-<script>
- function deleteRecord(id) {
-    var confirmDelete = confirm('Are you sure you want to delete this record?');
-    if (confirmDelete) {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4 && xhr.status === 200) {
-                // alert('Record deleted successfully.');
-                location.reload();
-            }
-        };
-        xhr.open('GET', 'subscribers.php?delete=' + id + '&confirm=yes', true);
-        xhr.send();
-    }
-}
-</script>
-
 <script>
 function toggleEmailVisibility(email) {
     if (!email || !email.includes('@')) {
@@ -787,16 +649,19 @@ function toggleEmailVisibility(email) {
                         // Toggle the button text dynamically
                         var button = document.getElementById('emailToggleBtn_' + email);
                         if (button) {
-                            if (button.innerText === 'full') {
-                                button.innerText = 'not';
-                                button.classList.remove('btn-outline-primary');
-                                button.classList.add('btn-outline-secondary');
-                            } else {
-                                button.innerText = 'full';
-                                button.classList.remove('btn-outline-secondary');
-                                button.classList.add('btn-outline-primary');
-                            }
-                        }
+                            if (button.classList.contains('btn-outline-secondary')) {
+        // If the button has the 'btn-outline-secondary' class, change to 'Full email' with secondary style
+        button.innerHTML = '<i class="bi bi-envelope-x" title="Mailbox Full"></i>'; // Add icon
+        button.classList.remove('btn-outline-secondary');
+        button.classList.add('btn-outline-danger');
+    } else {
+        // If the button doesn't have the 'btn-outline-secondary' class, change to 'Full' with warning style
+        button.innerHTML = '<i class="bi bi-envelope-x" title="Mailbox Full"></i>'; // Add icon
+        button.classList.remove('btn-outline-danger');
+        button.classList.add('btn-outline-secondary');
+    }
+}
+
                     } else {
                         console.error("Server response indicates failure:", response.message);
                     }
@@ -816,15 +681,10 @@ function toggleEmailVisibility(email) {
 </script>
 
 
-
-
-
 <!-- jQuery -->
 <script src="plugins/jquery/jquery.min.js"></script>
 <!-- Bootstrap 4 -->
 <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
-<script src="dist/js/adminlte.min.js"></script>
-<script src="dist/js/demo.js"></script>
 <!-- DataTables  & Plugins -->
 <script src="plugins/datatables/jquery.dataTables.min.js"></script>
 
@@ -836,8 +696,6 @@ function toggleEmailVisibility(email) {
 <!-- For buttons of table like csv, excel, etc.-->
 <script src="plugins/datatables-buttons/js/dataTables.buttons.min.js"></script>
 <script src="plugins/datatables-buttons/js/buttons.bootstrap4.min.js"></script>
-<!-- For zip files-->
-<script src="plugins/jszip/jszip.min.js"></script>
 <!-- For PDF Library-->
 <script src="plugins/pdfmake/pdfmake.min.js"></script>
 <!-- For PDF Library-->
@@ -853,85 +711,212 @@ function toggleEmailVisibility(email) {
 $(function () {
   // Initialize the DataTable for example1
   $("#example1").DataTable({
-    "responsive": true,
-    "lengthChange": false,
-    "autoWidth": false,
-    "buttons": [
-      "copy", "csv", "excel", "pdf", "print", "colvis",
-      {
-        text: 'Merge',  // Custom button text
-        action: function (e, dt, node, config) {
-          // Collect selected checkboxes
-          var selectedIds = [];
-          $(".subscriber-checkbox:checked").each(function () {
-            selectedIds.push($(this).val());
-          });
-
-          // Check if no checkboxes are selected
-if (selectedIds.length === 0) {
-  // Get the error message div
-  const errorDiv = document.getElementById('error-message');
-  
-  // Set the error message
-  errorDiv.textContent = "Please select subscribers you want to merge.";
-  
-  // Show the error message div
-  errorDiv.style.display = 'block';
-  
-  // Optionally, you can hide the error message after some time
-  setTimeout(() => {
-    errorDiv.style.display = 'none';
-  }, 3000); // Hide after 3 seconds
-  return;
-}
-
-          // Sort subscriber IDs in ascending order
-          selectedIds.sort(function(a, b) {
-            return a - b;
-          });
-
-          // The first (smallest) subscriber ID to keep
-          var firstSubscriberId = selectedIds[0];
-
-          // Send AJAX request to merge the subscribers
-          $.ajax({
-            url: 'merge_subscribers.php', // Your PHP file for handling the merge
-            type: 'POST',
-            data: {
-              subscriber_ids: selectedIds,
-              first_subscriber_id: firstSubscriberId
-            },
-            success: function(response) {
-              // If merge is successful, redirect to the edit page
-              window.location.href = 'edit_subscriber.php?id=' + firstSubscriberId;
-            },
-            error: function(xhr, status, error) {
-              alert("An error occurred: " + error);
-            }
-          });
-        },
-        className: 'btn-merge',
-    init: function (dt, node, config) {
-        $(node).css({
-            'background-color': '#42a832',
-            'color': '#fff',
-            'border': 'none',
-            'padding': '8px 12px',
-            'border-radius': '4px',
-            'cursor': 'pointer'
-        });
-    }
-      }
-    ],
-    "initComplete": function () {
-      // Ensure the button container stays at the top while scrolling
-      var buttonsContainer = $('#example1_wrapper .col-md-6:eq(0)');
-      buttonsContainer.css('position', 'sticky');
-      buttonsContainer.css('top', '0');
-      buttonsContainer.css('z-index', '1000');
+  "responsive": true,
+  "lengthChange": false,
+  "autoWidth": false,
+ "buttons": [
+    {
+        extend: "copy",  // Copy button
+        exportOptions: {
+            columns: ':not(:eq(0)):not(:last-child)',  // Exclude both the first and last columns
+            modifier: { selected: null }
+        }
     },
-    "fixedHeader": true // Enable the fixedHeader feature
-  }).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
+    {
+    extend: "csv",  // CSV button
+    exportOptions: {
+        columns: ':not(:eq(0)):not(:last-child)',  // Exclude first and last columns
+        modifier: { selected: null }
+    },
+    filename: function() {
+        // Get the current date in mm-dd-yyyy format
+        var currentDate = new Date();
+        var mm = currentDate.getMonth() + 1;  // Months are zero-indexed
+        var dd = currentDate.getDate();
+        var yyyy = currentDate.getFullYear();
+
+        // Format date as mm-dd-yyyy
+        var formattedDate = mm + '-' + dd + '-' + yyyy;
+
+        // Return the desired filename for the CSV file
+        return 'list-' + formattedDate;
+    }
+},
+    {
+        extend: "pdf",  // PDF button
+        exportOptions: {
+            columns: ':not(:eq(0)):not(:last-child)',  // Exclude both the first and last columns
+            modifier: { selected: null }
+        }
+    },
+    {
+        extend: "print",  // Print button
+        exportOptions: {
+            columns: ':not(:eq(0)):not(:last-child)',  // Exclude both the first and last columns
+            modifier: { selected: null }
+        }
+    },
+    "colvis",
+    {
+    text: '<i class="bi bi-trash" title="Delete"></i>',  // Custom Delete button
+  action: function (e, dt, node, config) {
+    // Array to hold selected subscriber IDs
+    var selectedIds = [];
+
+    // Collect the IDs of the selected checkboxes
+    $(".subscriber-checkbox:checked").each(function () {
+      selectedIds.push($(this).val());
+    });
+
+    // If no subscribers are selected, show an error message
+    if (selectedIds.length === 0) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.textContent = "Please select subscribers to delete.";
+      errorDiv.style.display = 'block';
+      setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+      return;
+    }
+
+    // Ask the user to confirm the deletion
+    if (!confirm("Are you sure you want to delete the selected subscriber?")) {
+      return;
+    }
+
+    // Send an AJAX request to delete the selected subscribers
+    $.ajax({
+      url: 'deleteSubscriber.php', // Adjust with your actual delete endpoint
+      type: 'POST',
+      data: { subscriber_ids: selectedIds }, // Send an array of selected subscriber IDs
+      success: function(response) {
+        const successDiv = document.getElementById('error-message');
+        successDiv.style.display = 'block';
+        setTimeout(() => { successDiv.style.display = 'none'; }, 3000);
+        location.reload(); 
+        successDiv.textContent = "Selected subscriber have been deleted."; // Refresh the page to update the table
+      },
+      error: function(xhr, status, error) {
+        const errorDiv = document.getElementById('error-message');
+        errorDiv.textContent = "An error occurred: " + error;
+        errorDiv.style.display = 'block';
+        setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+      }
+    });
+  },
+  className: 'btn-delete',
+  init: function (dt, node, config) {
+    $(node).css({
+      'background-color': '#d9534f',
+      'color': '#fff',
+      "deferRender": true,
+      'border': 'none',
+      'padding': '8px 12px',
+      'border-radius': '4px',
+      'cursor': 'pointer'
+    });
+  }
+}, {
+    text: '<i class="bi bi-download" title="Download VCard"></i>',   // Custom Download VCF button
+  action: function (e, dt, node, config) {
+    var selectedIds = [];
+
+    // Collect the IDs of the selected checkboxes
+    $(".subscriber-checkbox:checked").each(function () {
+      selectedIds.push($(this).val());
+    });
+
+    // If no subscribers are selected, show an error message
+    if (selectedIds.length === 0) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.textContent = "Please select a subscriber to download the VCF.";
+      errorDiv.style.display = 'block';
+      setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+      return;
+    }
+
+    // Send an AJAX request to download the VCF for the selected subscriber
+    $.ajax({
+      url: 'subscribers.php',  // Same page to handle the request
+      type: 'POST',
+      data: { action: 'download_vcf', subscriber_ids: selectedIds },  // Send selected subscriber IDs
+      success: function(response) {
+        // Assuming the server sends a downloadable VCF response
+        const successDiv = document.getElementById('error-message');
+        successDiv.textContent = "VCF has been downloaded.";
+        successDiv.style.display = 'block';
+        setTimeout(() => { successDiv.style.display = 'none'; }, 3000);
+      },
+      error: function(xhr, status, error) {
+        const errorDiv = document.getElementById('error-message');
+        errorDiv.textContent = "An error occurred: " + error;
+        errorDiv.style.display = 'block';
+        setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+      }
+    });
+  },
+  className: 'btn-download-vcf',
+  init: function (dt, node, config) {
+    $(node).css({
+      'background-color': '#5bc0de',
+      'color': '#fff',
+      'border': 'none',
+      'padding': '8px 12px',
+      'border-radius': '4px',
+      'cursor': 'pointer'
+    });
+  }
+},
+    {
+      text: 'Merge',
+      action: function (e, dt, node, config) {
+        var selectedIds = [];
+        $(".subscriber-checkbox:checked").each(function () {
+          selectedIds.push($(this).val());
+        });
+
+        if (selectedIds.length === 0) {
+          const errorDiv = document.getElementById('error-message');
+          errorDiv.textContent = "Please select subscribers you want to merge.";
+          errorDiv.style.display = 'block';
+          setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
+          return;
+        }
+
+        selectedIds.sort(function(a, b) { return a - b; });
+        var firstSubscriberId = selectedIds[0];
+
+        $.ajax({
+          url: 'merge_subscribers.php',
+          type: 'POST',
+          data: { subscriber_ids: selectedIds, first_subscriber_id: firstSubscriberId },
+          success: function(response) {
+            window.location.href = 'edit_subscriber.php?id=' + firstSubscriberId;
+          },
+          error: function(xhr, status, error) {
+            alert("An error occurred: " + error);
+          }
+        });
+      },
+      className: 'btn-merge',
+      init: function (dt, node, config) {
+        $(node).css({
+          'background-color': '#42a832',
+          'color': '#fff',
+          'border': 'none',
+          'padding': '8px 12px',
+          'border-radius': '4px',
+          'cursor': 'pointer'
+        });
+      }
+    }
+  ],
+  "initComplete": function () {
+    var buttonsContainer = $('#example1_wrapper .col-md-6:eq(0)');
+    buttonsContainer.css('position', 'sticky');
+    buttonsContainer.css('top', '0');
+    buttonsContainer.css('z-index', '1000');
+  },
+  "fixedHeader": true
+}).buttons().container().appendTo('#example1_wrapper .col-md-6:eq(0)');
 
   // Initialize the DataTable for example2
   $(document).ready(function () {

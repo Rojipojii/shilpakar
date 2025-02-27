@@ -114,34 +114,39 @@ $stmtDesignationOrganization->close();
 
 
     // Insert into event_subscriber_mapping
-    if ($event_id !== null && $category_id !== null && $organizer_id !== null) {
-        $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id, category_id) VALUES (?, ?, ?, ?)";
-        $stmtMapping = $conn->prepare($sqlMapping);
-        if (!$stmtMapping) {
-            error_log("Prepare failed: " . $conn->error);
-            return false;
-        }
-        $stmtMapping->bind_param("iiii", $subscriberId, $event_id, $organizer_id, $category_id);
-        if (!$stmtMapping->execute()) {
-            error_log("Execute failed: " . $stmtMapping->error);
-            return false;
-        }
-        $stmtMapping->close();
-    } else {
-        $defaultCategoryId = 6; // Default category ID
-        $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)";
-        $stmtMapping = $conn->prepare($sqlMapping);
-        if (!$stmtMapping) {
-            error_log("Prepare failed: " . $conn->error);
-            return false;
-        }
-        $stmtMapping->bind_param("ii", $subscriberId, $defaultCategoryId);
-        if (!$stmtMapping->execute()) {
-            error_log("Execute failed: " . $stmtMapping->error);
-            return false;
-        }
-        $stmtMapping->close();
+    // Debugging logs before insertion
+error_log("Inserting mapping: Subscriber ID: $subscriberId, Event ID: " . ($event_id ?? 'NULL') . ", Organizer ID: " . ($organizer_id ?? 'NULL'));
+
+if ($event_id !== null && $organizer_id !== null) {
+    $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id) VALUES (?, ?, ?)";
+    $stmtMapping = $conn->prepare($sqlMapping);
+    if (!$stmtMapping) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
     }
+    $stmtMapping->bind_param("iii", $subscriberId, $event_id, $organizer_id);
+    if (!$stmtMapping->execute()) {
+        error_log("Execute failed: " . $stmtMapping->error);
+        return false;
+    }
+    $stmtMapping->close();
+} else {
+    error_log("Error: event_id or organizer_id is NULL. Default category assigned.");
+    $defaultCategoryId = 6;
+    $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, category_id) VALUES (?, ?)";
+    $stmtMapping = $conn->prepare($sqlMapping);
+    if (!$stmtMapping) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+    $stmtMapping->bind_param("ii", $subscriberId, $defaultCategoryId);
+    if (!$stmtMapping->execute()) {
+        error_log("Execute failed: " . $stmtMapping->error);
+        return false;
+    }
+    $stmtMapping->close();
+}
+
 
     return true;
 }
@@ -226,10 +231,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             $event = $_SESSION["activatedEvents"][$selectedEvent];
             $event_id = $event["event_id"];
-            $category_id = $event["category_id"];
-            $organizer_id = $event["organizer_id"];
+            $organizer_id = $event["organizer_id"]; // Keep organizer_id
 
-            if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $category_id, $organizer_id)) {
+            if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $organizer_id)) {
                 $event_name = $event["eventname"];
                 header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
                 exit();
@@ -241,10 +245,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($activatedEvents !== null && count($activatedEvents) === 1) {
             $activatedEvent = reset($activatedEvents);
             $event_id = $activatedEvent["event_id"];
-            $category_id = $activatedEvent["category_id"];
             $organizer_id = $activatedEvent["organizer_id"];
 
-            if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $category_id, $organizer_id)) {
+            if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $organizer_id)) {
                 $event_name = $activatedEvent["eventname"];
                 header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
                 exit();
@@ -261,6 +264,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -291,21 +295,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 echo '<h2 class="text-center">' . $headingText . '</h2>';
                 ?>
 
-
 <form action="index.php" method="post" onsubmit="return validateForm()" id="registrationForm">
 <div class="form-group">
-
-<?php if ($activatedEvents !== null && count($activatedEvents) === 1): ?>
+<?php if ($activatedEvents !== null && count($activatedEvents) === 1): ?> 
     <div class="alert alert-info" role="alert">
-<?php
-        // Display the activated event names and dates for multiple activated events
-        foreach ($activatedEvents as $event) {
-            echo "Today's Event: " . $event['event_name'] . "<br>";
-            echo  " Date: " . $event['event_date'] . "<br>";
-        }
-        ?>
+        <?php foreach ($activatedEvents as $event): ?>
+            <h2 class="text-center"><?php echo htmlspecialchars($event['event_name']); ?></h2>
+            <h4 class="text-center">
+                <?php 
+                    $date = new DateTime($event['event_date']); 
+                    echo $date->format('j F Y'); // Output: "26 February 2025"
+
+                    // Fetch organizer name based on organizer_id using MySQLi
+                    $organizerId = $event['organizer_id'];
+                    $query = "SELECT organizer_name FROM organizers WHERE organizer_id = '$organizerId'";
+                    $result = $conn->query($query);
+
+                    if ($result && $result->num_rows > 0) {
+                        $organizer = $result->fetch_assoc();
+                        echo  " | " .  "Organized by " . htmlspecialchars($organizer['organizer_name']);
+                    } else {
+                        echo " / Organizer not found";
+                    }
+                ?>
+            </h4>
+        <?php endforeach; ?>
     </div>
 <?php elseif (empty($activatedEvent)): ?>
+
+
+
     
 <?php endif; ?>
 
@@ -323,37 +342,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
     <?php endif; ?>
 
-    <br><br>
 
      
     <div class="form-group">
-    <label for="mobileNumber">Mobile Number:</label>
+    <label for="mobileNumber" style="font-size: 18px;">Mobile Number</label>
+
     <!-- Add oninput attribute to trigger the AJAX request -->
     <input type="text" id="mobileNumber" name="mobileNumber" pattern="[0-9]{10}" minlength="10" maxlength="10" 
            class="form-control" required oninput="checkPhoneNumber()">
-    <small id="mobileError" class="form-text text-danger"></small><br><br>
+    <small id="mobileError" class="form-text text-danger"></small><br>
 </div>
 
 <div id="additionalFields">
     <div class="form-group">
-        <label for="fullName">Full Name:</label>
-        <input type="text" id="fullName" name="fullName" class="form-control" value="" disabled><br><br>
+        <label for="fullName" style="font-size: 18px;">Full Name</label>
+        <input type="text" id="fullName" name="fullName" class="form-control" value="" disabled><br>
     </div>
     <div class="form-group">
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" class="form-control" value="" disabled><br><br>
+        <label for="email" style="font-size: 18px;">Email</label>
+        <input type="email" id="email" name="email" class="form-control" value="" disabled><br>
     </div>
     <div class="form-group">
-        <label for="designation">Designation:</label>
-        <input type="text" id="designation" name="designation" class="form-control" value="" disabled><br><br>
+        <label for="designation" style="font-size: 18px;">Designation</label>
+        <input type="text" id="designation" name="designation" class="form-control" value="" disabled><br>
     </div>
     <div class="form-group">
-        <label for="organization">Organization:</label>
-        <input type="text" id="organization" name="organization" class="form-control" value="" disabled><br><br>
+        <label for="organization" style="font-size: 18px;">Organization</label>
+        <input type="text" id="organization" name="organization" class="form-control" value="" disabled><br>
     </div>
 </div>
 
-<button type="submit" class="btn btn-outline-success" value="Register">Submit</button>
+<div class="text-center">
+    <button type="submit" class="btn btn-outline-success">Submit</button>
+</div>
+
 <script>
     function validateForm() {
         // Get the mobile number input and error message span
@@ -439,20 +461,20 @@ function populateForm(user) {
     // Show the additional form fields
     document.getElementById("additionalFields").innerHTML = `
         <div class="form-group">
-            <label for="fullName">Full Name:</label>
-            <input type="text" id="fullName" name="fullName" class="form-control" required value="${user.full_name || ''}"><br><br>
+            <label for="fullName" style="font-size: 18px;">Full Name</label>
+            <input type="text" id="fullName" name="fullName" class="form-control" required value="${user.full_name || ''}"><br>
         </div>
         <div class="form-group">
-            <label for="email">Email:</label>
-            <input type="email" id="email" name="email" class="form-control" value="${user.email || ''}"><br><br>
+            <label for="email" style="font-size: 18px;">Email</label>
+            <input type="email" id="email" name="email" class="form-control" value="${user.email || ''}"><br>
         </div>
         <div class="form-group">
-            <label for="designation">Designation:</label>
-            <input type="text" id="designation" name="designation" class="form-control" value="${user.designation || ''}"><br><br>
+            <label for="designation" style="font-size: 18px;">Designation</label>
+            <input type="text" id="designation" name="designation" class="form-control" value="${user.designation || ''}"><br>
         </div>
         <div class="form-group">
-            <label for="organization">Organization:</label>
-            <input type="text" id="organization" name="organization" class="form-control" value="${user.organization || ''}"><br><br>
+            <label for="organization" style="font-size: 18px;">Organization</label>
+            <input type="text" id="organization" name="organization" class="form-control" value="${user.organization || ''}"><br>
         </div>
     `;
 

@@ -1,0 +1,575 @@
+.small-box {
+    border-radius: 0.25rem;
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.125), 0 1px 3px rgba(0, 0, 0, 0.2);
+    display: block;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  
+  .small-box > .inner {
+    padding: 10px;
+  }
+  
+  .small-box > .small-box-footer {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    display: block;
+    padding: 3px 0;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    z-index: 10;
+  }
+  
+  .small-box > .small-box-footer:hover {
+    background-color: rgba(0, 0, 0, 0.15);
+    color: #fff;
+  }
+  
+  .small-box h3 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding: 0;
+    white-space: nowrap;
+  }
+  
+  @media (min-width: 992px) {
+    .col-xl-2 .small-box h3,
+    .col-lg-2 .small-box h3,
+    .col-md-2 .small-box h3 {
+      font-size: 1.6rem;
+    }
+    .col-xl-3 .small-box h3,
+    .col-lg-3 .small-box h3,
+    .col-md-3 .small-box h3 {
+      font-size: 1.6rem;
+    }
+  }
+  
+  @media (min-width: 1200px) {
+    .col-xl-2 .small-box h3,
+    .col-lg-2 .small-box h3,
+    .col-md-2 .small-box h3 {
+      font-size: 2.2rem;
+    }
+    .col-xl-3 .small-box h3,
+    .col-lg-3 .small-box h3,
+    .col-md-3 .small-box h3 {
+      font-size: 2.2rem;
+    }
+  }
+  
+  .small-box p {
+    font-size: 1rem;
+  }
+  
+  .small-box p > small {
+    color: #f8f9fa;
+    display: block;
+    font-size: .9rem;
+    margin-top: 5px;
+  }
+  
+  .small-box h3,
+  .small-box p {
+    z-index: 5;
+  }
+  
+  .small-box .icon {
+    color: rgba(0, 0, 0, 0.15);
+    z-index: 0;
+  }
+  
+  .small-box .icon > i {
+    font-size: 90px;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    transition: -webkit-transform 0.3s linear;
+    transition: transform 0.3s linear;
+    transition: transform 0.3s linear, -webkit-transform 0.3s linear;
+  }
+  
+  .small-box .icon > i.fa, .small-box .icon > i.fas, .small-box .icon > i.far, .small-box .icon > i.fab, .small-box .icon > i.fal, .small-box .icon > i.fad, .small-box .icon > i.ion {
+    font-size: 70px;
+    top: 20px;
+  }
+  
+  .small-box .icon svg {
+    font-size: 70px;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    transition: -webkit-transform 0.3s linear;
+    transition: transform 0.3s linear;
+    transition: transform 0.3s linear, -webkit-transform 0.3s linear;
+  }
+  
+  .small-box:hover {
+    text-decoration: none;
+  }
+  
+  .small-box:hover .icon > i, .small-box:hover .icon > i.fa, .small-box:hover .icon > i.fas, .small-box:hover .icon > i.far, .small-box:hover .icon > i.fab, .small-box:hover .icon > i.fal, .small-box:hover .icon > i.fad, .small-box:hover .icon > i.ion {
+    -webkit-transform: scale(1.1);
+    transform: scale(1.1);
+  }
+  
+  .small-box:hover .icon > svg {
+    -webkit-transform: scale(1.1);
+    transform: scale(1.1);
+  }
+  
+  @media (max-width: 767.98px) {
+    .small-box {
+      text-align: center;
+    }
+    .small-box .icon {
+      display: none;
+    }
+    .small-box p {
+      font-size: 12px;
+    }
+  }
+  .info-box {
+    box-shadow: 0 0 1px rgba(0, 0, 0, 0.125), 0 1px 3px rgba(0, 0, 0, 0.2);
+    border-radius: 0.25rem;
+    background-color: #fff;
+    display: -ms-flexbox;
+    display: flex;
+    margin-bottom: 1rem;
+    min-height: 80px;
+    padding: .5rem;
+    position: relative;
+    width: 100%;
+  }
+  
+  .info-box .progress {
+    background-color: rgba(0, 0, 0, 0.125);
+    height: 2px;
+    margin: 5px 0;
+  }
+  
+  .info-box .progress .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box-icon {
+    border-radius: 0.25rem;
+    -ms-flex-align: center;
+    align-items: center;
+    display: -ms-flexbox;
+    display: flex;
+    font-size: 1.875rem;
+    -ms-flex-pack: center;
+    justify-content: center;
+    text-align: center;
+    width: 70px;
+  }
+  
+  .info-box .info-box-icon > img {
+    max-width: 100%;
+  }
+  
+  .info-box .info-box-content {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    -ms-flex-pack: center;
+    justify-content: center;
+    line-height: 1.8;
+    -ms-flex: 1;
+    flex: 1;
+    padding: 0 10px;
+    overflow: hidden;
+  }
+  
+  .info-box .info-box-number {
+    display: block;
+    margin-top: .25rem;
+    font-weight: 700;
+  }
+  
+  .info-box .progress-description,
+  .info-box .info-box-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .info-box .info-box .bg-primary,
+  .info-box .info-box .bg-gradient-primary {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-primary .progress-bar,
+  .info-box .info-box .bg-gradient-primary .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box .bg-secondary,
+  .info-box .info-box .bg-gradient-secondary {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-secondary .progress-bar,
+  .info-box .info-box .bg-gradient-secondary .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box .bg-success,
+  .info-box .info-box .bg-gradient-success {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-success .progress-bar,
+  .info-box .info-box .bg-gradient-success .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box .bg-info,
+  .info-box .info-box .bg-gradient-info {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-info .progress-bar,
+  .info-box .info-box .bg-gradient-info .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box .bg-warning,
+  .info-box .info-box .bg-gradient-warning {
+    color: #1f2d3d;
+  }
+  
+  .info-box .info-box .bg-warning .progress-bar,
+  .info-box .info-box .bg-gradient-warning .progress-bar {
+    background-color: #1f2d3d;
+  }
+  
+  .info-box .info-box .bg-danger,
+  .info-box .info-box .bg-gradient-danger {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-danger .progress-bar,
+  .info-box .info-box .bg-gradient-danger .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box .bg-light,
+  .info-box .info-box .bg-gradient-light {
+    color: #1f2d3d;
+  }
+  
+  .info-box .info-box .bg-light .progress-bar,
+  .info-box .info-box .bg-gradient-light .progress-bar {
+    background-color: #1f2d3d;
+  }
+  
+  .info-box .info-box .bg-dark,
+  .info-box .info-box .bg-gradient-dark {
+    color: #fff;
+  }
+  
+  .info-box .info-box .bg-dark .progress-bar,
+  .info-box .info-box .bg-gradient-dark .progress-bar {
+    background-color: #fff;
+  }
+  
+  .info-box .info-box-more {
+    display: block;
+  }
+  
+  .info-box .progress-description {
+    margin: 0;
+  }
+  .nav-sidebar > .nav-item .nav-icon {
+    margin-left: .05rem;
+    font-size: 1.2rem;
+    margin-right: .2rem;
+    text-align: center;
+    width: 1.6rem;
+  }
+  
+  .nav-sidebar > .nav-item .nav-icon.fa, .nav-sidebar > .nav-item .nav-icon.fas, .nav-sidebar > .nav-item .nav-icon.far, .nav-sidebar > .nav-item .nav-icon.fab, .nav-sidebar > .nav-item .nav-icon.fal, .nav-sidebar > .nav-item .nav-icon.fad, .nav-sidebar > .nav-item .nav-icon.svg-inline--fa, .nav-sidebar > .nav-item .nav-icon.ion {
+    font-size: 1.1rem;
+  }
+  
+  .nav-sidebar > .nav-item .float-right {
+    margin-top: 3px;
+  }
+  
+  .nav-sidebar .nav-treeview {
+    display: none;
+    list-style: none;
+    padding: 0;
+  }
+  
+  .nav-sidebar .nav-treeview > .nav-item > .nav-link > .nav-icon {
+    width: 1.6rem;
+  }
+  
+  .nav-sidebar.nav-child-indent .nav-treeview {
+    transition: padding 0.3s ease-in-out;
+    padding-left: 1rem;
+  }
+  
+  .text-sm .nav-sidebar.nav-child-indent .nav-treeview {
+    padding-left: .5rem;
+  }
+  
+  .nav-sidebar.nav-child-indent.nav-legacy .nav-treeview .nav-treeview {
+    padding-left: 2rem;
+    margin-left: -1rem;
+  }
+  
+  .text-sm .nav-sidebar.nav-child-indent.nav-legacy .nav-treeview .nav-treeview {
+    padding-left: 1rem;
+    margin-left: -.5rem;
+  }
+  
+  .nav-sidebar .nav-header {
+    font-size: .9rem;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .nav-sidebar .nav-link p {
+    display: inline;
+    margin: 0;
+    white-space: normal;
+  }
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand) .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand) .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand) .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-compact.nav-sidebar.nav-child-indent:not(.nav-flat) .nav-treeview {
+    padding-left: 1rem;
+    margin-left: -.5rem;
+  }
+  
+  .nav-flat {
+    margin: -0.25rem -0.5rem 0;
+  }
+  
+  .nav-flat .nav-item > .nav-link {
+    border-radius: 0;
+    margin-bottom: 0;
+  }
+  
+  .nav-flat .nav-item > .nav-link > .nav-icon {
+    margin-left: .55rem;
+  }
+  
+  .nav-flat:not(.nav-child-indent) .nav-treeview .nav-item > .nav-link > .nav-icon {
+    margin-left: .4rem;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview {
+    padding-left: 0;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-icon {
+    margin-left: .85rem;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-treeview {
+    border-left: .2rem solid;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.15rem;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.45rem;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.75rem;
+  }
+  
+  .nav-flat.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 2.05rem;
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-icon {
+    margin-left: .55rem;
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-link {
+    padding-left: calc(1rem - .2rem);
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-treeview .nav-icon {
+    margin-left: .35rem;
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: .15rem;
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: -.15rem;
+  }
+  
+  .sidebar-collapse .nav-flat.nav-child-indent .sidebar .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: -.35rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-compact.nav-sidebar .nav-treeview .nav-icon {
+    margin-left: .4rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-icon {
+    margin-left: .85rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.15rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.45rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 1.75rem;
+  }
+  
+  .sidebar-mini .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar:not(.sidebar-no-expand):hover .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-md .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon,
+  .sidebar-mini-xs .main-sidebar.sidebar-focused .nav-flat.nav-sidebar.nav-child-indent .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-treeview .nav-icon {
+    margin-left: 2.05rem;
+  }
+  
+  .nav-flat .nav-icon {
+    transition: margin-left ease-in-out 0.3s;
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .nav-flat .nav-icon {
+      transition: none;
+    }
+  }
+  
+  .nav-flat .nav-treeview .nav-icon {
+    margin-left: -.2rem;
+  }
+  
+  .nav-flat.nav-sidebar > .nav-item .nav-treeview,
+  .nav-flat.nav-sidebar > .nav-item > .nav-treeview {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .nav-flat.nav-sidebar > .nav-item .nav-treeview .nav-item > .nav-link,
+  .nav-flat.nav-sidebar > .nav-item > .nav-treeview .nav-item > .nav-link {
+    border-left: .2rem solid;
+  }
+  
+  .nav-legacy {
+    margin: -0.25rem -0.5rem 0;
+  }
+  
+  .nav-legacy.nav-sidebar .nav-item > .nav-link {
+    border-radius: 0;
+    margin-bottom: 0;
+  }
+  
+  .nav-legacy.nav-sidebar .nav-item > .nav-link > .nav-icon {
+    margin-left: .55rem;
+  }
+  
+  .text-sm .nav-legacy.nav-sidebar .nav-item > .nav-link > .nav-icon {
+    margin-left: .75rem;
+  }
+  
+  
+  
+  .text-sm .nav-legacy.nav-sidebar.nav-flat .nav-treeview .nav-item > .nav-link > .nav-icon {
+    margin-left: calc(.75rem - 3px);
+  }
+  
+  .sidebar-mini .nav-legacy > .nav-item .nav-link .nav-icon,
+  .sidebar-mini-md .nav-legacy > .nav-item .nav-link .nav-icon,
+  .sidebar-mini-xs .nav-legacy > .nav-item .nav-link .nav-icon {
+    transition: margin-left ease-in-out 0.3s;
+    margin-left: .6rem;
+  }
+  
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-mini .nav-legacy > .nav-item .nav-link .nav-icon,
+    .sidebar-mini-md .nav-legacy > .nav-item .nav-link .nav-icon,
+    .sidebar-mini-xs .nav-legacy > .nav-item .nav-link .nav-icon {
+      transition: none;
+    }
+  }
+  
+  .main-sidebar.sidebar-focused .nav-legacy .sidebar-mini.sidebar-collapse.nav-child-indent .nav-treeview,
+  .main-sidebar:hover .nav-legacy .sidebar-mini.sidebar-collapse.nav-child-indent .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.nav-child-indent .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.nav-child-indent .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.nav-child-indent .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.nav-child-indent .nav-treeview {
+    padding-left: 1rem;
+  }
+  
+  .main-sidebar.sidebar-focused .nav-legacy .sidebar-mini.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview,
+  .main-sidebar:hover .nav-legacy .sidebar-mini.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.nav-child-indent .nav-treeview .nav-treeview {
+    padding-left: 2rem;
+    margin-left: -1rem;
+  }
+  
+  .main-sidebar.sidebar-focused .nav-legacy .sidebar-mini.sidebar-collapse.text-sm.nav-child-indent .nav-treeview,
+  .main-sidebar:hover .nav-legacy .sidebar-mini.sidebar-collapse.text-sm.nav-child-indent .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.text-sm.nav-child-indent .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-md.sidebar-collapse.text-sm.nav-child-indent .nav-treeview, .main-sidebar.sidebar-focused
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.text-sm.nav-child-indent .nav-treeview,
+  .main-sidebar:hover
+  .nav-legacy .sidebar-mini-xs.sidebar-collapse.text-sm.nav-child-indent .nav-treeview {
+    padding-left: .5rem;
+  }
+  

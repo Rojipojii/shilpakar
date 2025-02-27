@@ -10,22 +10,6 @@ if (!isset($_SESSION['id'])) {
 
 // Include the necessary files
 require_once "db.php";
-require_once "mergeGroups.php"; // Include the function file
-
-// Get the total number of groups to merge
-$totalGroupsToMerge = getGroupsToMerge($conn);
-
-// Store the result in session
-$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
-
-
-
-// Check if the 'merge_success' parameter is in the URL
-if (isset($_GET['merge_success']) && $_GET['merge_success'] == 1) {
-    $organizerMessage = "Subscribers merged successfully!";
-} else {
-    $organizerMessage = "";
-}
 
 // Fetch all events with event_date
 $allEventsQuery = $conn->prepare("SELECT event_id, event_name, event_date FROM events");
@@ -230,6 +214,7 @@ $subscriber['organizers_affiliated'] = implode(',', $organizersAffiliated);
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
     // Retrieve edited subscriber details from the form
     $full_name = $_POST['full_name'];
     $phone_numbers = $_POST['phone_number'] ;
@@ -357,155 +342,157 @@ if (!empty($errors)) {
     echo "All operations completed successfully.";
 }
 
+
+
 // Start a transaction to ensure atomicity
 $conn->begin_transaction();
 
+// Fetch existing categories for the subscriber
+$existingCategoriesQuery = $conn->prepare("
+    SELECT category_id 
+    FROM event_subscriber_mapping 
+    WHERE subscriber_id = ?
+");
+$existingCategoriesQuery->bind_param("i", $subscriberID);
+$existingCategoriesQuery->execute();
+$existingCategoriesResult = $existingCategoriesQuery->get_result();
 
-    // Fetch existing events for the subscriber
-    $existingEventsQuery = $conn->prepare("
-        SELECT event_id 
-        FROM event_subscriber_mapping 
-        WHERE subscriber_id = ?
-    ");
-    $existingEventsQuery->bind_param("i", $subscriberID);
-    $existingEventsQuery->execute();
-    $existingEventsResult = $existingEventsQuery->get_result();
+$existingCategories = [];
+while ($row = $existingCategoriesResult->fetch_assoc()) {
+    $existingCategories[] = $row['category_id'];
+}
 
-    $existingEvents = [];
-    while ($row = $existingEventsResult->fetch_assoc()) {
-        $existingEvents[] = $row['event_id'];
+// Fetch existing events for the subscriber
+$existingEventsQuery = $conn->prepare("
+    SELECT event_id 
+    FROM event_subscriber_mapping 
+    WHERE subscriber_id = ?
+");
+$existingEventsQuery->bind_param("i", $subscriberID);
+$existingEventsQuery->execute();
+$existingEventsResult = $existingEventsQuery->get_result();
+
+$existingEvents = [];
+while ($row = $existingEventsResult->fetch_assoc()) {
+    $existingEvents[] = $row['event_id'];
+}
+
+// Adding new categories
+foreach ($selectedCategories as $categoryID) {
+    if (!in_array($categoryID, $existingCategories)) {
+        $insertCategoryStmt = $conn->prepare("
+            INSERT INTO event_subscriber_mapping (subscriber_id, category_id) 
+            VALUES (?, ?)
+        ");
+        $insertCategoryStmt->bind_param("ii", $subscriberID, $categoryID);
+        if (!$insertCategoryStmt->execute()) {
+            throw new Exception("Error inserting category_id $categoryID: " . $insertCategoryStmt->error);
+        }
+        $existingCategories[] = $categoryID; // Update the existing categories list
     }
+}
 
-    // Fetch existing categories for the subscriber
-    $existingCategoriesQuery = $conn->prepare("
-        SELECT DISTINCT category_id 
-        FROM event_subscriber_mapping 
-        WHERE subscriber_id = ?
-    ");
-    $existingCategoriesQuery->bind_param("i", $subscriberID);
-    $existingCategoriesQuery->execute();
-    $existingCategoriesResult = $existingCategoriesQuery->get_result();
+// Adding new events
+$eventDetailsQuery = $conn->prepare("
+    SELECT event_id, event_name, event_date, organizer_id 
+    FROM events 
+    WHERE event_id = ?
+");
+foreach ($selectedEvents as $eventID) {
+    if (!in_array($eventID, $existingEvents)) {
+        // Fetch event details
+        $eventDetailsQuery->bind_param("i", $eventID);
+        $eventDetailsQuery->execute();
+        $eventDetailsResult = $eventDetailsQuery->get_result();
 
-    $existingCategories = [];
-    while ($row = $existingCategoriesResult->fetch_assoc()) {
-        $existingCategories[] = $row['category_id'];
-    }
+        if ($eventDetails = $eventDetailsResult->fetch_assoc()) {
+            // Extract event details
+            $eventID = $eventDetails['event_id'];
+            $organizerID = $eventDetails['organizer_id'];
 
-    // Handle adding new categories independently
-    foreach ($selectedCategories as $categoryID) {
-        if (!in_array($categoryID, $existingCategories)) {
-            $insertCategoryStmt = $conn->prepare("
-                INSERT INTO event_subscriber_mapping (subscriber_id, category_id) 
-                VALUES (?, ?)
+            // Insert the event without involving categories
+            $insertEventStmt = $conn->prepare("
+                INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id) 
+                VALUES (?, ?, ?)
             ");
-            $insertCategoryStmt->bind_param("ii", $subscriberID, $categoryID);
-            if (!$insertCategoryStmt->execute()) {
-                throw new Exception("Error inserting category_id $categoryID: " . $insertCategoryStmt->error);
+            $insertEventStmt->bind_param("iii", $subscriberID, $eventID, $organizerID);
+            if (!$insertEventStmt->execute()) {
+                throw new Exception("Error inserting event_id {$eventDetails['event_id']}: " . $insertEventStmt->error);
             }
-            $existingCategories[] = $categoryID; // Update the existing categories list
+        } else {
+            throw new Exception("Event ID $eventID not found in events table.");
         }
     }
+}
 
-    // Add new events and ensure their categories exist
-    $eventDetailsQuery = $conn->prepare("
-        SELECT event_id, category_id, organizer_id 
-        FROM events 
-        WHERE event_id = ?
-    ");
-    foreach ($selectedEvents as $eventID) {
-        if (!in_array($eventID, $existingEvents)) {
-            // Fetch event details
-            $eventDetailsQuery->bind_param("i", $eventID);
-            $eventDetailsQuery->execute();
-            $eventDetailsResult = $eventDetailsQuery->get_result();
 
-            if ($eventDetails = $eventDetailsResult->fetch_assoc()) {
-                // Ensure the category exists
-                if (!in_array($eventDetails['category_id'], $existingCategories)) {
-                    $insertCategoryStmt = $conn->prepare("
-                        INSERT INTO event_subscriber_mapping (subscriber_id, category_id) 
-                        VALUES (?, ?)
-                    ");
-                    $insertCategoryStmt->bind_param("ii", $subscriberID, $eventDetails['category_id']);
-                    if (!$insertCategoryStmt->execute()) {
-                        throw new Exception("Error inserting category_id {$eventDetails['category_id']}: " . $insertCategoryStmt->error);
-                    }
-                    $existingCategories[] = $eventDetails['category_id']; // Update the existing categories list
-                }
-
-                // Insert the event
-                $insertEventStmt = $conn->prepare("
-                    INSERT INTO event_subscriber_mapping (subscriber_id, event_id, category_id, organizer_id) 
-                    VALUES (?, ?, ?, ?)
-                ");
-                $insertEventStmt->bind_param(
-                    "iiii",
-                    $subscriberID,
-                    $eventDetails['event_id'],
-                    $eventDetails['category_id'],
-                    $eventDetails['organizer_id']
-                );
-                if (!$insertEventStmt->execute()) {
-                    throw new Exception("Error inserting event_id {$eventDetails['event_id']}: " . $insertEventStmt->error);
-                }
-            } else {
-                throw new Exception("Event ID $eventID not found in events table.");
-            }
+foreach ($existingCategories as $categoryID) {
+    if (!in_array($categoryID, $selectedCategories)) {
+        // Directly delete the category from event_subscriber_mapping
+        $deleteCategoryStmt = $conn->prepare("
+            DELETE FROM event_subscriber_mapping 
+            WHERE subscriber_id = ? AND category_id = ?
+        ");
+        $deleteCategoryStmt->bind_param("ii", $subscriberID, $categoryID);
+        if (!$deleteCategoryStmt->execute()) {
+            throw new Exception("Error deleting category_id $categoryID: " . $deleteCategoryStmt->error);
         }
     }
+}
 
-    // Remove unselected events
-    foreach ($existingEvents as $eventID) {
-        if (!in_array($eventID, $selectedEvents)) {
-            $deleteEventStmt = $conn->prepare("
-                DELETE FROM event_subscriber_mapping 
-                WHERE subscriber_id = ? AND event_id = ?
-            ");
-            $deleteEventStmt->bind_param("ii", $subscriberID, $eventID);
-            if (!$deleteEventStmt->execute()) {
-                throw new Exception("Error deleting event_id $eventID: " . $deleteEventStmt->error);
-            }
+
+// Remove unselected events
+foreach ($existingEvents as $eventID) {
+    if (!in_array($eventID, $selectedEvents)) {
+        $deleteEventStmt = $conn->prepare("
+            DELETE FROM event_subscriber_mapping 
+            WHERE subscriber_id = ? AND event_id = ?
+        ");
+        $deleteEventStmt->bind_param("ii", $subscriberID, $eventID);
+        if (!$deleteEventStmt->execute()) {
+            throw new Exception("Error deleting event_id $eventID: " . $deleteEventStmt->error);
         }
     }
-
-    // Remove unselected categories only if no events are tied to them
-    foreach ($existingCategories as $categoryID) {
-        if (!in_array($categoryID, $selectedCategories)) {
-            $checkCategoryEventsStmt = $conn->prepare("
-                SELECT COUNT(*) as count 
-                FROM event_subscriber_mapping 
-                WHERE subscriber_id = ? AND category_id = ?
-            ");
-            $checkCategoryEventsStmt->bind_param("ii", $subscriberID, $categoryID);
-            $checkCategoryEventsStmt->execute();
-            $checkCategoryEventsResult = $checkCategoryEventsStmt->get_result();
-            $categoryEventCountRow = $checkCategoryEventsResult->fetch_assoc();
-
-            if ($categoryEventCountRow['count'] == 0) {
-                $deleteCategoryStmt = $conn->prepare("
-                    DELETE FROM event_subscriber_mapping 
-                    WHERE subscriber_id = ? AND category_id = ?
-                ");
-                $deleteCategoryStmt->bind_param("ii", $subscriberID, $categoryID);
-                if (!$deleteCategoryStmt->execute()) {
-                    throw new Exception("Error deleting category_id $categoryID: " . $deleteCategoryStmt->error);
-                }
-            }
-        }
-    }
+}
 
 // Commit the transaction if all queries were successful
 $conn->commit();
 
+
+
 // After form submission, check if the user came from the merge page
 if (isset($_SESSION['from_merge_page']) && $_SESSION['from_merge_page'] === true) {
-    // Redirect back to the merge page after saving the subscriber
-    unset($_SESSION['from_merge_page']); // Optionally clear the session variable
+    unset($_SESSION['from_merge_page']); // Clear session variable
     header("Location: merge.php"); // Redirect to merge page
     exit(); // Ensure no further code is executed
-} else {
-    // Redirect to another page, if necessary (e.g., back to the edit subscriber page)
-    header("Location: subscribers.php");
+}
+
+
+// // If the session variable for listPhonenumbers is set, redirect to listnumbers.php
+// else if (isset($_SESSION['from_list_phonenumbers']) && $_SESSION['from_list_phonenumbers'] === true) {
+//     unset($_SESSION['from_list_phonenumbers']); // Clear session variable
+//     header("Location: listnumbers.php"); // Redirect to listnumbers.php
+//     exit(); 
+// }
+
+// // If the session variable for listPhonenumbers is set, redirect to listnumbers.php
+// else if (isset($_SESSION['from_dashboard']) && $_SESSION['from_dashboard'] === true) {
+//     unset($_SESSION['from_dashboard']); // Clear session variable
+//     header("Location: dashboard.php"); // Redirect to listnumbers.php
+//     exit(); 
+// }
+
+// // If the session variable for listEmails is set, redirect to listEmails.php
+// else if (isset($_SESSION['from_list_emails']) && $_SESSION['from_list_emails'] === true) {
+//     unset($_SESSION['from_list_emails']); // Clear session variable
+//     header("Location: listEmails.php"); // Redirect to listEmails.php
+//     exit(); 
+// } 
+
+
+// If no session variables are set, redirect to subscribers.php or another default page
+else {
+    header("Location: dashboard.php");
     exit();
 }
 
@@ -755,47 +742,91 @@ h5.mb-0,
 <div class="col-md-6">
     <label for="email" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Email</label>
 
-    <?php if (!empty($subscriberEmails)): ?>
-        <?php foreach ($subscriberEmails as $index => $email): ?>
+    <?php
+    $allEmails = array_merge($subscriberEmails, $hiddenEmails); // Combine both lists
+    ?>
+
+    <?php if (!empty($allEmails)): ?>
+        <?php foreach ($allEmails as $index => $email): ?>
             <?php
-                // Check if the email is hidden
+                $emailEscaped = htmlspecialchars($email);
                 $isHidden = in_array($email, $hiddenEmails);
             ?>
-            <?php if (!$isHidden): ?>
-                <!-- Regular Email -->
-                <div class="mb-2 d-flex align-items-center" id="email-row-<?php echo $index; ?>">
-                    <input type="text" name="email[]" id="email" class="form-control regular-email" 
-                           value="<?php echo htmlspecialchars($email); ?>"><br>
+            <div class="mb-2 d-flex align-items-center" id="email-row-<?php echo $index; ?>">
+                <input type="text" name="email[]" class="form-control regular-email" 
+                       value="<?php echo $emailEscaped; ?>" 
+                       <?php echo $isHidden ? 'style="color: red; font-style: italic;" readonly' : ''; ?>>
 
-                    <button type="button" class="btn btn-link ms-2 add-email">+</button>
-                    <button type="button" class="btn btn-link ms-2 remove-email">-</button>
-                </div>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    <?php endif; ?>
+                <!-- Toggle Email Visibility Button -->
+                <button type="button" id="emailToggleBtn_<?php echo $index; ?>"
+                        class="btn btn-sm <?php echo $isHidden ? 'btn-outline-danger' : 'btn-outline-secondary'; ?>"
+                        onclick="toggleEmailVisibility('<?php echo $emailEscaped; ?>', <?php echo $index; ?>)">
+                    <i class="bi <?php echo $isHidden ? 'bi-eye-slash' : 'bi-eye'; ?>" title="Toggle Visibility"></i>
+                </button>
 
-    <!-- Display Hidden Emails -->
-    <?php if (!empty($hiddenEmails)): ?>
-        <?php foreach ($hiddenEmails as $email): ?>
-            <div class="mb-2 d-flex align-items-center">
-                <input class="form-control regular-email"  style="color: red; font-style: italic;"
-                       value="<?php echo htmlspecialchars($email); ?>" readonly>
                 <button type="button" class="btn btn-link ms-2 add-email">+</button>
                 <button type="button" class="btn btn-link ms-2 remove-email">-</button>
             </div>
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <?php if (empty($subscriberEmails) && empty($hiddenEmails)): ?>
+    <?php if (empty($allEmails)): ?>
         <!-- Placeholder for new email input -->
         <div class="mb-2 d-flex align-items-center">
-            <input type="text" name="email[]" id="email" class="form-control" placeholder="Enter email">
+            <input type="text" name="email[]" class="form-control" placeholder="Enter email">
             <button type="button" class="btn btn-link ms-2 add-email">+</button>
             <button type="button" class="btn btn-link ms-2 remove-email">-</button>
         </div>
     <?php endif; ?>
 </div>
 
+
+<script>
+function toggleEmailVisibility(email, index) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "update_email_visibility.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    var inputField = document.querySelector(`#email-row-${index} input`);
+                    var button = document.querySelector(`#emailToggleBtn_${index} i`);
+                    var buttonParent = document.querySelector(`#emailToggleBtn_${index}`);
+                    var hiddenField = document.querySelector(`#email-hidden-${index}`);
+
+                    if (inputField.hasAttribute("readonly")) {
+                        inputField.removeAttribute("readonly");
+                        inputField.style.color = "";
+                        inputField.style.fontStyle = "";
+                        button.classList.replace("bi-eye-slash", "bi-eye");
+                        buttonParent.classList.replace("btn-outline-danger", "btn-outline-secondary");
+
+                        hiddenField.value = "0"; // Update hidden field
+                    } else {
+                        inputField.setAttribute("readonly", "true");
+                        inputField.style.color = "red";
+                        inputField.style.fontStyle = "italic";
+                        button.classList.replace("bi-eye", "bi-eye-slash");
+                        buttonParent.classList.replace("btn-outline-secondary", "btn-outline-danger");
+
+                        hiddenField.value = "1"; // Update hidden field
+                    }
+                } else {
+                    console.error("Server response indicates failure:", response.message);
+                }
+            } catch (error) {
+                console.error("Error parsing server response:", error);
+            }
+        }
+    };
+
+    xhr.send("email=" + encodeURIComponent(email));
+}
+
+</script>
 
 
 
@@ -1064,15 +1095,28 @@ foreach ($allCategories as $category) {
 
     <!-- Add margin-bottom to create space -->
 <div style="margin-top: 20px;"></div> 
-    <div class="row">
+<div class="row">
     <!-- Submit Button -->
-    <div class="col-md-12 d-flex justify-content-center">
+    <div class="col-md-12 d-flex justify-content-center"  style="margin-bottom: 20px;">
+        <!-- Save Button -->
         <button type="submit" class="btn btn-success custom-btn">Save</button>
+        
+        <!-- Delete Button (Redirect to delete.php with subscriber_id) -->
+        <!-- Delete Button (Redirect to delete.php with subscriber_id) -->
+<a href="delete.php?subscriber_id=<?php echo $subscriberID; ?>" class="btn btn-danger custom-btn ml-2" onclick="return confirm('Are you sure you want to delete this subscriber?');">Delete</a>
+
     </div>
+</div>
+
+
+
+
 </div>
 </div>
 
+
 </form>
+
 
 <script>
     function validateForm() {

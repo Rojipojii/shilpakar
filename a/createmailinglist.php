@@ -274,27 +274,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["createListCategoryOrga
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>All Categories</td>
-                            <td>
-                                <input type="checkbox" name="category[]" value="all"
-                                    <?php if (in_array('all', $category)) echo 'checked'; ?>>
-                            </td>
-                            <td><?php echo getTotalPeopleByCategory($conn, ['all']); ?></td>
-                        </tr>
-                        <?php
-                        foreach ($categoryList as $cat) {
-                            echo "<tr>";
-                            echo "<td>" . $cat["category_name"] . "</td>";
-                            echo "<td><input type='checkbox' name='category[]' value='" . $cat["category_id"] . "'";
-                            if (in_array($cat["category_id"], $category)) {
-                                echo " checked";
-                            }
-                            echo "></td>";
-                            echo "<td>" . getTotalPeopleByCategory($conn, [$cat["category_id"]]) . "</td>";
-                            echo "</tr>";
-                        }
-                        ?>
+                    <tr> 
+    <td>All Categories</td>
+    <td>
+        <input type="checkbox" name="category[]" value="all"
+            <?php if (in_array('all', $category)) echo 'checked'; ?>>
+    </td>
+    <td><?php echo getTotalPeopleByCategory($conn, ['all']); ?></td>
+</tr>
+
+<?php
+// Sort categories alphabetically by category name
+usort($categoryList, function($a, $b) {
+    return strcmp($a['category_name'], $b['category_name']);
+});
+
+// Loop through the sorted categories and display them
+foreach ($categoryList as $cat) {
+    echo "<tr>";
+    echo "<td>" . $cat["category_name"] . "</td>";
+    echo "<td><input type='checkbox' name='category[]' value='" . $cat["category_id"] . "'";
+    if (in_array($cat["category_id"], $category)) {
+        echo " checked";
+    }
+    echo "></td>";
+    echo "<td>" . getTotalPeopleByCategory($conn, [$cat["category_id"]]) . "</td>";
+    echo "</tr>";
+}
+?>
+
                     </tbody>
                 </table>
         </div>
@@ -311,27 +319,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["createListCategoryOrga
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>All Organizers</td>
-                        <td>
-                            <input type="checkbox" name="organizer[]" value="all"
-                                <?php if (in_array('all', $organizer)) echo 'checked'; ?>>
-                        </td>
-                        <td><?php echo getTotalPeopleByOrganizer($conn, ['all']); ?></td>
-                    </tr>
-                    <?php
-                    foreach ($organizerList as $org) {
-                        echo "<tr>";
-                        echo "<td>" . $org["organizer_name"] . "</td>";
-                        echo "<td><input type='checkbox' name='organizer[]' value='" . $org["organizer_id"] . "'";
-                        if (in_array($org["organizer_id"], $organizer)) {
-                            echo " checked";
-                        }
-                        echo "></td>";
-                        echo "<td>" . getTotalPeopleByOrganizer($conn, [$org["organizer_id"]]) . "</td>";
-                        echo "</tr>";
-                    }
-                    ?>
+                <tr>
+    <td>All Organizers</td>
+    <td>
+        <input type="checkbox" name="organizer[]" value="all"
+            <?php if (in_array('all', $organizer)) echo 'checked'; ?>>
+    </td>
+    <td><?php echo getTotalPeopleByOrganizer($conn, ['all']); ?></td>
+</tr>
+
+<?php
+// Sort organizers alphabetically by organizer name
+usort($organizerList, function($a, $b) {
+    return strcmp($a['organizer_name'], $b['organizer_name']);
+});
+
+// Loop through the sorted organizers and display them
+foreach ($organizerList as $org) {
+    echo "<tr>";
+    echo "<td>" . $org["organizer_name"] . "</td>";
+    echo "<td><input type='checkbox' name='organizer[]' value='" . $org["organizer_id"] . "'";
+    if (in_array($org["organizer_id"], $organizer)) {
+        echo " checked";
+    }
+    echo "></td>";
+    echo "<td>" . getTotalPeopleByOrganizer($conn, [$org["organizer_id"]]) . "</td>";
+    echo "</tr>";
+}
+?>
+
                 </tbody>
             </table>
         </div>

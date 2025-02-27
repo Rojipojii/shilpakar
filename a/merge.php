@@ -149,17 +149,10 @@ function findGroupForSubscriber($subscriberId, $groups) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['merge'])) {
 
-        $mergeIds = $_POST['merge']; // Array of selected subscriber IDs
-        // // Check if at least two checkboxes are selected
-        // if (count($mergeIds) < 2) {
-        //     echo "Please select at least two subscribers to merge.";
-        //     exit(); // Stop further execution
-        // }
+        $mergeIds = $_POST['merge']; 
 
         // Set a session variable to indicate the merge page origin
         $_SESSION['from_merge_page'] = true;
-
-
 
         // Get the first subscriber ID in the group
         $firstSubscriberId = $mergeIds[0];
@@ -224,10 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
-
-
-   
+<body> 
 <?php 
 // // Calculate the total number of groups to merge
 // $totalGroupsToMerge = count($groups);
@@ -251,7 +241,12 @@ include("header.php"); ?>
                             <table class="table table-bordered table-striped">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>Select</th>
+                                    <th style="text-align: center; vertical-align: middle; padding: 10px;">
+    <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+        <input class="form-check-input select-all" type="checkbox">
+    </div>
+</th>
+
                                         <th>Full Name</th>
                                         <th>Phone Numbers</th>
                                         <th>Emails</th>
@@ -323,25 +318,32 @@ include("header.php"); ?>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-    // Select all forms with the 'merge-form' class
     document.querySelectorAll('.merge-form').forEach(form => {
-        form.addEventListener('submit', (e) => {
-            // Get all checkboxes in the current form
-            const checkboxes = form.querySelectorAll('input[name="merge[]"]');
-            const errorMessage = form.querySelector('.error-message');
+        const selectAllCheckbox = form.querySelector('.select-all');
+        const checkboxes = form.querySelectorAll('input[name="merge[]"]');
 
-            // Check if at least two checkboxes are selected
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function () {
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = this.checked;
+                });
+            });
+        }
+
+        form.addEventListener('submit', (e) => {
+            const errorMessage = form.querySelector('.error-message');
             const checkedCount = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
 
-if (checkedCount < 2) {
-    e.preventDefault(); // Prevent form submission
-    errorMessage.style.display = 'block'; // Show error message
-} else {
-    errorMessage.style.display = 'none'; // Hide error message
-}
+            if (checkedCount < 2) {
+                e.preventDefault();
+                errorMessage.style.display = 'block';
+            } else {
+                errorMessage.style.display = 'none';
+            }
         });
     });
 });
+
 </script>
 
 

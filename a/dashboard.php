@@ -11,16 +11,10 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
+// After form submission or action:
+    $_SESSION['from_dashbaord'] = true;
+
 require_once "db.php"; // Include the database connection file
-require_once "mergeGroups.php"; // Include the function file
-
-
-// Get the total number of groups to merge
-$totalGroupsToMerge = getGroupsToMerge($conn);
-
-
-// Store the result in session
-$_SESSION['totalGroupsToMerge'] = $totalGroupsToMerge;
 
 // Function to fetch total number of people from all data
 function getTotalPeopleFromAllData($conn) {
@@ -184,6 +178,7 @@ $subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['c
       <!-- Theme style -->
       <!-- Include Bootstrap CSS -->
       <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+      <link rel="stylesheet" href="dashboard.css">
       <!-- Link to Bootstrap Icons CSS -->
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@latest/font/bootstrap-icons.css">
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
@@ -192,22 +187,21 @@ $subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['c
     <?php include("header.php"); ?>
       <!-- Content Wrapper. Contains page content -->
   <div class="content-wrapper">
-    <!-- Content Header (Page header) -->
-    <div class="content-header">
       <div class="container-fluid">
         <div class="row mb-2">
         <div class="col-lg-3 col-6">
             <!-- small box -->
             <div class="small-box bg-info">
-                <div class="inner">
-                    <h3><?php echo getTotalPeopleFromAllData($conn); ?></h3>
-                    <p>Total Number of People</p>
-                </div>
-                <div class="icon"> <!-- Adjust the font-size as needed -->
-                <i class="bi bi-person-fill"></i>
-                </div>
-                <a href="list" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
-            </div>
+    <div class="inner">
+        <h3 style="color: white;"><?php echo getTotalPeopleFromAllData($conn); ?></h3>
+        <p style="color: white;">Total Number of People</p>
+    </div>
+    <div class="icon"> <!-- Adjust the font-size as needed -->
+        <i class="bi bi-person-fill"></i>
+    </div>
+    <a href="list" class="small-box-footer">More info <i class="fas fa-arrow-circle-right"></i></a>
+</div>
+
         </div>
 
 
@@ -215,8 +209,8 @@ $subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['c
     <!-- small box -->
     <div class="small-box bg-danger">
         <div class="inner">
-            <h3><?php echo getTotalEvents($conn); ?></h3>
-            <p>Total Number of Events/Activities</p>
+            <h3 style="color: white;"><?php echo getTotalEvents($conn); ?></h3>
+            <p style="color: white;">Total Number of Events/Activities</p>
         </div>
         <div class="icon">
         <i class="bi bi-calendar-event"></i>
@@ -229,8 +223,8 @@ $subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['c
     <!-- small box -->
     <div class="small-box bg-warning">
         <div class="inner">
-            <h3><?php echo getTotalRepeatVisitors($conn); ?></h3>
-            <p>Repeated Visitors:</p>
+            <h3 style="color: white;"><?php echo getTotalRepeatVisitors($conn); ?></h3>
+            <p style="color: white;">Repeated Visitors:</p>
         </div>
         <div class="icon">
             <i class="bi bi-person-plus-fill"></i>
@@ -240,44 +234,42 @@ $subscribersWithoutPhoneCount = $subscribersWithoutPhoneResult->fetch_assoc()['c
 </div>
 
 
-<div class="col-lg-3 col-6">
+<div class="col-lg-3 col-6" style="position: relative; z-index: 99999; overflow: visible;">
     <!-- small box -->
-    <div class="small-box bg-success">
+    <div class="small-box bg-success" style="position: relative; z-index: 99999;">
         <div class="inner">
-            <h1>
+            <div>
                 <a href="download.php?format=csv" class="btn btn-success"><i class="bi bi-filetype-csv"></i> Download CSV</a><br>
                 <a href="download.php?format=xlsx" class="btn btn-success"><i class="bi bi-file-excel"></i> Download Excel</a><br>
-                <a href="download.php?format=vcf" class="btn btn-success"><i class="bi bi-person-vcard-fill"></i> Download VCard</a><br>
-            </h1>
+                <a href="download.php?format=vcf" class="btn btn-success"><i class="bi bi-person-vcard-fill"></i> Download VCard</a>
+            </div>
         </div>
         <div class="icon">
             <i class="bi bi-file-earmark-arrow-down-fill"></i>
         </div>
     </div>
 </div>
-</div>
 
-<ul class="list-group">
-            <div class="row">
+
+<!-- <ul class="list-group">
+            <div class="row"> -->
                 <!-- Display count for people without email -->
-                <li class="list-group-item col-md-6">
+                <!-- <li class="list-group-item col-md-6">
                     <label>Total Number of People Without Email:</label>       
                     <a href="listEmails.php" style="text-decoration: underline; color: inherit;" 
    onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
    onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';" ><?= $subscribersWithoutEmailCount; ?></a>
-                </li>
+                </li> -->
 
                 <!-- Display count for people without phone -->
-                <li class="list-group-item col-md-6">
+                <!-- <li class="list-group-item col-md-6">
                     <label>Total Number of People Without Phone Number:</label>
                     <a href="listnumbers.php" style="text-decoration: underline; color: inherit;" 
    onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
    onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';"><?= $subscribersWithoutPhoneCount; ?></a>
                 </li>
             </div>
-        </ul>
-
-<br>
+        </ul> -->
 
 <!-- Two-column layout for List of Events and Top 10 Attendees -->
 <div class="row mt-4">
