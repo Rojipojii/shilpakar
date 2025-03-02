@@ -85,6 +85,45 @@ if ($mailboxFullResult) {
     $mailboxFullContent = "Error executing query: " . mysqli_error($conn);
 }
 
+// Query to select emails where does_not_exist = 1 along with subscriber_id
+$unsubscribedEmailsQuery = "SELECT DISTINCT email, subscriber_id FROM emails WHERE does_not_exist = 1 ORDER BY email ASC";
+$unsubscribedEmailsResult = mysqli_query($conn, $unsubscribedEmailsQuery);
+
+$unsubscribedEmailsContent = '';
+$unsubscribedEmailsCount = 0;
+
+if ($unsubscribedEmailsResult) {
+    if (mysqli_num_rows($unsubscribedEmailsResult) > 0) {
+        $unsubscribedEmailsContent .= "<table class='table table-bordered table-striped'>
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                    </tr>
+                </thead>
+                <tbody>";
+
+        while ($row = mysqli_fetch_assoc($unsubscribedEmailsResult)) {
+            $email = htmlspecialchars($row['email']);
+            $subscriberId = $row['subscriber_id'];
+
+            $unsubscribedEmailsContent .= "<tr>
+                <td><a href='edit_subscriber.php?id=$subscriberId'
+                style='text-decoration: underline; color: inherit;'
+                onmouseover=\"this.style.textDecoration='none'; this.style.color='inherit';\" 
+                onmouseout=\"this.style.textDecoration='underline'; this.style.color='inherit';\">$email</a></td>
+              </tr>";
+
+            $unsubscribedEmailsCount++;
+        }
+
+        $unsubscribedEmailsContent .= "</tbody></table>";
+    } else {
+        $unsubscribedEmailsContent = "No unsubscribed emails found.";
+    }
+} else {
+    $unsubscribedEmailsContent = "Error executing query: " . mysqli_error($conn);
+}
+
 // Subscribers without email content
 $subscribersWithoutEmailCount = 0;
 if ($subscribersWithoutEmailQuery) {
@@ -196,6 +235,8 @@ while ($row = mysqli_fetch_assoc($subscribersWithoutPhoneQuery)) {
     $subscribersWithoutPhoneContent = "Error executing query: " . mysqli_error($conn);
 }
 
+
+
 // Close the database connection
 mysqli_close($conn);
 
@@ -215,21 +256,28 @@ mysqli_close($conn);
     <div class="content-wrapper">
             <div class="container-fluid">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h2>Mailbox Full (<?= ($mailboxFullCount); ?>)</h2>
                         <?php echo $mailboxFullContent; ?>
                     </div>
 
+                    <div class="col-md-3">
+    <h2>Unsubscribed Emails (<?= $unsubscribedEmailsCount; ?>)</h2>
+    <?php echo $unsubscribedEmailsContent; ?>
+</div>
+
+
                     <!-- Display the subscribers without emails section -->
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h2>Subscribers Without Emails (<?= ($subscribersWithoutEmailCount); ?>)</h2>
                         <?php echo $subscribersWithoutEmailContent; ?>
                     </div>
                      <!-- Display the subscribers without emails section -->
-                     <div class="col-md-4">
+                     <div class="col-md-3">
                         <h2>Subscribers Without Phone Numbers (<?= ($subscribersWithoutPhoneCount); ?>)</h2>
                         <?php echo $subscribersWithoutPhoneContent; ?>
                     </div>
+                    
                 </div>
             </div>
         </div>

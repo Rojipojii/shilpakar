@@ -451,8 +451,8 @@ if ($result->num_rows > 0) {
         }
 
 
-// Fetch all emails and their visibility (hidden) status for the subscriber
-$sqlEmail = "SELECT email, hidden FROM emails WHERE subscriber_id = ?";
+// Fetch all emails and their visibility (hidden) and existence (nonexistent) status for the subscriber
+$sqlEmail = "SELECT email, hidden, does_not_exist FROM emails WHERE subscriber_id = ?";
 $stmtEmail = $conn->prepare($sqlEmail);
 $stmtEmail->bind_param("i", $row["subscriber_id"]);  // Bind the subscriber_id parameter
 $stmtEmail->execute();
@@ -461,9 +461,13 @@ $resultEmail = $stmtEmail->get_result();
 // Initialize arrays to store emails and their visibility
 $emails = [];
 while ($emailData = $resultEmail->fetch_assoc()) {
-    // Normalize email to lowercase and store visibility
+    // Normalize email to lowercase and store visibility + non-existence status
     $normalizedEmail = strtolower(trim($emailData['email']));
-    $emails[] = ['email' => $normalizedEmail, 'hidden' => $emailData['hidden']];
+    $emails[] = [
+        'email' => $normalizedEmail, 
+        'hidden' => $emailData['hidden'], 
+        'nonexistent' => $emailData['does_not_exist']
+    ];
 }
 
 // Deduplicate emails while preserving the visibility status
@@ -490,29 +494,53 @@ $emailsString = implode(', ', $emailAddresses); // Now we use the email addresse
 
 
         
-// Now display the emails and their visibility toggle button
-echo "<td>";
-if (!empty($emails)) {
-    foreach ($emails as $emailData) {
-        // Display the email address
-        $email = htmlspecialchars($emailData['email']);  // Safely handle special characters
-        echo $email . ' ';
-
-        // Check the email visibility for each email
-        $emailHidden = $emailData['hidden'];
-
-        // Display the toggle button based on the current visibility
-        $buttonText = $emailHidden == 1 ? '<i class="bi bi-envelope-x " title="Mailbox Full"></i>' : '<i class="bi bi-envelope-x" title="Mailbox Full"></i>';
-        $buttonClass = $emailHidden == 1 ? 'btn-outline-danger' : 'btn-outline-secondary';
+        echo "<td>";
+        if (!empty($emails)) {
+            foreach ($emails as $emailData) {
+                // Display the email address
+                $email = htmlspecialchars($emailData['email']);  // Safely handle special characters
+                $emailHidden = $emailData['hidden'];
+                $emailNonExistent = $emailData['nonexistent']; // Assuming this is stored in the DB
         
-        // Generate the button with unique ID and email as the parameter
-        echo "<button id='emailToggleBtn_" . $email . "' class='btn $buttonClass btn-sm' onclick='toggleEmailVisibility(\"$email\")'>$buttonText</button><br>";
-    }
-} else {
-    // Display '—' if no emails are available
-    echo '&mdash;';
-}
-echo "</td>";
+                // Determine styles for hidden/nonexistent emails
+                $emailStyle = "";
+                if ($emailHidden == 1) {
+                    $emailStyle = 'style="color: red; font-style: italic;"';
+                } elseif ($emailNonExistent == 1) {
+                    $emailStyle = 'style="color: blue; font-style: italic;"';
+                }
+        
+                // echo "<span $emailStyle>$email</span> ";
+                echo "<span $emailStyle data-email=\"$email\" class='me-2'>$email</span>";
+
+
+                 // Display buttons only if an email exists
+        if (!empty($email)) {
+        
+                // Toggle Visibility Button
+                $visibilityIcon = '<i class="bi bi-envelope-exclamation" title="Mailbox Full"></i>';
+                $visibilityClass = $emailHidden == 1 ? 'btn-outline-danger' : 'btn-outline-secondary';
+        
+                echo "<button id='emailToggleBtn_" . $email . "' 
+          class='btn $visibilityClass btn-sm me-2' 
+          onclick='toggleEmailVisibility(\"$email\")'>$visibilityIcon</button>";
+        
+                // Toggle Email Doesn't Exist Button
+                $nonExistIcon = '<i class="bi bi-envelope-slash" title="Email Doesn’t Exist/Unsubscribed"></i>';
+                $nonExistClass = $emailNonExistent == 1 ? 'btn-outline-primary' : 'btn-outline-secondary';
+        
+                echo "<button id='emailDoesNotExistBtn_" . $email . "' 
+                          class='btn $nonExistClass btn-sm' 
+                          onclick='toggleEmailNonExistence(\"$email\")'>$nonExistIcon</button>";
+                        }
+                echo "<br>"; // New line for each email entry
+            }
+        } else {
+            // Display '—' if no emails are available
+            echo '&mdash;';
+        }
+        echo "</td>";
+        
 
 
 
@@ -623,61 +651,98 @@ $stmt->close();
 </div>
 <!-- ./wrapper -->
 <script>
-function toggleEmailVisibility(email) {
-    if (!email || !email.includes('@')) {
-        console.error("Invalid email provided: " + email);
-        return;
-    }
+function sanitizeEmailForSelector(email) {
+    return email.replace(/@/g, '-').replace(/\./g, '-');
+}
 
-    // Create a new AJAX request
+function toggleEmailVisibility(email) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "update_email_visibility.php", true);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 
-    // Log the email being sent
-    console.log("Toggling visibility for email: " + email);
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    var sanitizedEmail = sanitizeEmailForSelector(email);
+                    var visibilityButton = document.querySelector(`#emailToggleBtn_${sanitizedEmail}`);
+                    var nonexistentButton = document.querySelector(`#emailDoesNotExistBtn_${sanitizedEmail}`);
+                    var emailText = document.querySelector(`span[data-email="${email}"]`);
 
-    // Handle the server response
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-                try {
-                    // Parse the JSON response
-                    var response = JSON.parse(xhr.responseText);
-
-                    if (response.success) {
-                        // Toggle the button text dynamically
-                        var button = document.getElementById('emailToggleBtn_' + email);
-                        if (button) {
-                            if (button.classList.contains('btn-outline-secondary')) {
-        // If the button has the 'btn-outline-secondary' class, change to 'Full email' with secondary style
-        button.innerHTML = '<i class="bi bi-envelope-x" title="Mailbox Full"></i>'; // Add icon
-        button.classList.remove('btn-outline-secondary');
-        button.classList.add('btn-outline-danger');
-    } else {
-        // If the button doesn't have the 'btn-outline-secondary' class, change to 'Full' with warning style
-        button.innerHTML = '<i class="bi bi-envelope-x" title="Mailbox Full"></i>'; // Add icon
-        button.classList.remove('btn-outline-danger');
-        button.classList.add('btn-outline-secondary');
-    }
-}
-
-                    } else {
-                        console.error("Server response indicates failure:", response.message);
+                    if (!visibilityButton || !nonexistentButton || !emailText) {
+                        console.error("Elements not found:", { visibilityButton, nonexistentButton, emailText });
+                        return;
                     }
-                } catch (error) {
-                    console.error("Error parsing server response:", error);
-                    console.error("Response text:", xhr.responseText);
+
+                    var isHidden = emailText.style.color === "red";
+
+                    // Toggle visibility state
+                    emailText.style.color = isHidden ? "" : "red";
+                    emailText.style.fontStyle = isHidden ? "" : "italic";
+
+                    if (isHidden) {
+                        visibilityButton.classList.replace("btn-outline-danger", "btn-outline-secondary");
+                    } else {
+                        visibilityButton.classList.replace("btn-outline-secondary", "btn-outline-danger");
+                        nonexistentButton.classList.replace("btn-outline-primary", "btn-outline-secondary"); // Reset nonexistent
+                    }
+                } else {
+                    console.error("Server response failure:", response.message);
                 }
-            } else {
-                console.error("AJAX request failed. Status:", xhr.status, "Response:", xhr.responseText);
+            } catch (error) {
+                console.error("Error parsing response:", error);
             }
         }
     };
 
-    // Send the email to the server
-    xhr.send("email=" + encodeURIComponent(email));
+    xhr.send("email=" + encodeURIComponent(email) + "&toggle=visibility");
 }
+
+function toggleEmailNonExistence(email) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "update_email_visibility.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    var sanitizedEmail = sanitizeEmailForSelector(email);
+                    var nonexistentButton = document.querySelector(`#emailDoesNotExistBtn_${sanitizedEmail}`);
+                    var visibilityButton = document.querySelector(`#emailToggleBtn_${sanitizedEmail}`);
+                    var emailText = document.querySelector(`span[data-email="${email}"]`);
+
+                    if (!nonexistentButton || !visibilityButton || !emailText) {
+                        console.error("Elements not found:", { nonexistentButton, visibilityButton, emailText });
+                        return;
+                    }
+
+                    var isNonExistent = emailText.style.color === "blue";
+
+                    // Toggle nonexistent state
+                    emailText.style.color = isNonExistent ? "" : "blue";
+                    emailText.style.fontStyle = isNonExistent ? "" : "italic";
+
+                    if (isNonExistent) {
+                        nonexistentButton.classList.replace("btn-outline-primary", "btn-outline-secondary");
+                    } else {
+                        nonexistentButton.classList.replace("btn-outline-secondary", "btn-outline-primary");
+                        visibilityButton.classList.replace("btn-outline-danger", "btn-outline-secondary"); // Reset visibility
+                    }
+                } else {
+                    console.error("Server response failure:", response.message);
+                }
+            } catch (error) {
+                console.error("Error parsing response:", error);
+            }
+        }
+    };
+
+    xhr.send("email=" + encodeURIComponent(email) + "&toggle=nonexistent");
+}
+
 </script>
 
 

@@ -62,8 +62,8 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
         $subscriberPhones = array_unique($subscriberPhones);
         $subscriberPhone = implode(', ', $subscriberPhones);
 
-// Fetch all emails and the hidden column associated with the subscriber
-$emailQuery = $conn->prepare("SELECT email, hidden FROM emails WHERE subscriber_id = ?");
+// Fetch all emails along with 'hidden' and 'does_not_exist' status associated with the subscriber
+$emailQuery = $conn->prepare("SELECT email, hidden, does_not_exist FROM emails WHERE subscriber_id = ?");
 if ($emailQuery === false) {
     die('MySQL prepare error for email query: ' . $conn->error);
 }
@@ -73,13 +73,15 @@ $emailResult = $emailQuery->get_result();
 
 $subscriberEmails = [];
 $hiddenEmails = []; // Store emails marked as hidden
+$nonexistentEmails = []; // Store emails marked as non-existent
 
 while ($row = $emailResult->fetch_assoc()) {
     // Normalize the email to lowercase for consistency
     $email = strtolower($row['email']);
-    
-    // Check if the email is hidden
-    if ($row['hidden'] == 1) {
+
+    if ($row['does_not_exist'] == 1) {
+        $nonexistentEmails[] = $email; // Add non-existent emails to a separate array
+    } elseif ($row['hidden'] == 1) {
         $hiddenEmails[] = $email; // Add hidden emails to the separate array
     } else {
         $subscriberEmails[] = $email; // Add non-hidden emails to the main array
@@ -89,10 +91,12 @@ while ($row = $emailResult->fetch_assoc()) {
 // Remove duplicates
 $subscriberEmails = array_unique($subscriberEmails);
 $hiddenEmails = array_unique($hiddenEmails);
+$nonexistentEmails = array_unique($nonexistentEmails);
 
 // Convert the arrays to comma-separated strings if needed
 $subscriberEmailString = implode(', ', $subscriberEmails);
 $hiddenEmailString = implode(', ', $hiddenEmails);
+$nonexistentEmailString = implode(', ', $nonexistentEmails);
 
 
 // Fetch all designations and organizations associated with the subscriber
@@ -466,39 +470,11 @@ if (isset($_SESSION['from_merge_page']) && $_SESSION['from_merge_page'] === true
     header("Location: merge.php"); // Redirect to merge page
     exit(); // Ensure no further code is executed
 }
-
-
-// // If the session variable for listPhonenumbers is set, redirect to listnumbers.php
-// else if (isset($_SESSION['from_list_phonenumbers']) && $_SESSION['from_list_phonenumbers'] === true) {
-//     unset($_SESSION['from_list_phonenumbers']); // Clear session variable
-//     header("Location: listnumbers.php"); // Redirect to listnumbers.php
-//     exit(); 
-// }
-
-// // If the session variable for listPhonenumbers is set, redirect to listnumbers.php
-// else if (isset($_SESSION['from_dashboard']) && $_SESSION['from_dashboard'] === true) {
-//     unset($_SESSION['from_dashboard']); // Clear session variable
-//     header("Location: dashboard.php"); // Redirect to listnumbers.php
-//     exit(); 
-// }
-
-// // If the session variable for listEmails is set, redirect to listEmails.php
-// else if (isset($_SESSION['from_list_emails']) && $_SESSION['from_list_emails'] === true) {
-//     unset($_SESSION['from_list_emails']); // Clear session variable
-//     header("Location: listEmails.php"); // Redirect to listEmails.php
-//     exit(); 
-// } 
-
-
 // If no session variables are set, redirect to subscribers.php or another default page
 else {
     header("Location: dashboard.php");
     exit();
 }
-
-// // Redirect back to subscribers page after updating
-// header("Location: subscribers.php");
-// exit();
 } else {
 // Error occurred while updating the subscriber details
 $errorMessage = "Error updating subscriber details: " . $conn->error;
@@ -738,12 +714,12 @@ h5.mb-0,
 
 
 
-
 <div class="col-md-6">
     <label for="email" class="form-label custom-label" style="font-size: 1.25rem; font-weight: 500;">Email</label>
 
     <?php
-    $allEmails = array_merge($subscriberEmails, $hiddenEmails); // Combine both lists
+    // Merge all email statuses into one list to loop over
+    $allEmails = array_merge($subscriberEmails, $hiddenEmails, $nonexistentEmails);
     ?>
 
     <?php if (!empty($allEmails)): ?>
@@ -751,17 +727,35 @@ h5.mb-0,
             <?php
                 $emailEscaped = htmlspecialchars($email);
                 $isHidden = in_array($email, $hiddenEmails);
+                $doesNotExist = in_array($email, $nonexistentEmails);
             ?>
             <div class="mb-2 d-flex align-items-center" id="email-row-<?php echo $index; ?>">
                 <input type="text" name="email[]" class="form-control regular-email" 
                        value="<?php echo $emailEscaped; ?>" 
-                       <?php echo $isHidden ? 'style="color: red; font-style: italic;" readonly' : ''; ?>>
+                       <?php 
+                       if ($isHidden) {
+                           echo 'style="color: red; font-style: italic;" readonly';
+                       } elseif ($doesNotExist) {
+                           echo 'style="color: blue; font-style: italic;" readonly';
+                       }
+                       ?>>
 
                 <!-- Toggle Email Visibility Button -->
                 <button type="button" id="emailToggleBtn_<?php echo $index; ?>"
-                        class="btn btn-sm <?php echo $isHidden ? 'btn-outline-danger' : 'btn-outline-secondary'; ?>"
+                        class="btn btn-sm"
                         onclick="toggleEmailVisibility('<?php echo $emailEscaped; ?>', <?php echo $index; ?>)">
-                    <i class="bi <?php echo $isHidden ? 'bi-eye-slash' : 'bi-eye'; ?>" title="Toggle Visibility"></i>
+                    <i class="bi bi-envelope-exclamation" 
+                       style="color: <?php echo $isHidden ? 'red' : 'grey'; ?>;"
+                       title="Mailbox Full"></i>
+                </button>
+
+                <!-- Email Doesn't Exist Button -->
+                <button type="button" id="emailDoesNotExistBtn_<?php echo $index; ?>"
+                        class="btn btn-sm"
+                        onclick="toggleEmailNonExistence('<?php echo $emailEscaped; ?>', <?php echo $index; ?>)">
+                    <i class="bi bi-envelope-slash" 
+                       style="color: <?php echo $doesNotExist ? 'blue' : 'grey'; ?>;"
+                       title="Email Doesn’t Exist/Unsubscribed"></i>
                 </button>
 
                 <button type="button" class="btn btn-link ms-2 add-email">+</button>
@@ -781,6 +775,7 @@ h5.mb-0,
 </div>
 
 
+
 <script>
 function toggleEmailVisibility(email, index) {
     var xhr = new XMLHttpRequest();
@@ -793,26 +788,35 @@ function toggleEmailVisibility(email, index) {
                 var response = JSON.parse(xhr.responseText);
                 if (response.success) {
                     var inputField = document.querySelector(`#email-row-${index} input`);
-                    var button = document.querySelector(`#emailToggleBtn_${index} i`);
-                    var buttonParent = document.querySelector(`#emailToggleBtn_${index}`);
-                    var hiddenField = document.querySelector(`#email-hidden-${index}`);
+                    var visibilityIcon = document.querySelector(`#emailToggleBtn_${index} i`);
+                    var visibilityButton = document.querySelector(`#emailToggleBtn_${index}`);
+                    var nonexistentIcon = document.querySelector(`#emailDoesNotExistBtn_${index} i`);
+                    var nonexistentButton = document.querySelector(`#emailDoesNotExistBtn_${index}`);
 
-                    if (inputField.hasAttribute("readonly")) {
+                    // Toggle visibility state
+                    var isHidden = inputField.style.color === "red";
+
+                    if (isHidden) {
+                        // Set email to visible
                         inputField.removeAttribute("readonly");
                         inputField.style.color = "";
                         inputField.style.fontStyle = "";
-                        button.classList.replace("bi-eye-slash", "bi-eye");
-                        buttonParent.classList.replace("btn-outline-danger", "btn-outline-secondary");
-
-                        hiddenField.value = "0"; // Update hidden field
+                        visibilityIcon.style.color = "grey"; // Grey icon when visible
+                        visibilityButton.classList.remove("btn-outline-danger");
+                        visibilityButton.classList.add("btn-outline-secondary"); // Grey button
                     } else {
+                        // Set email to hidden
                         inputField.setAttribute("readonly", "true");
                         inputField.style.color = "red";
                         inputField.style.fontStyle = "italic";
-                        button.classList.replace("bi-eye", "bi-eye-slash");
-                        buttonParent.classList.replace("btn-outline-secondary", "btn-outline-danger");
+                        visibilityIcon.style.color = "red"; // Red icon when hidden
+                        visibilityButton.classList.remove("btn-outline-secondary");
+                        visibilityButton.classList.add("btn-outline-danger"); // Red button
 
-                        hiddenField.value = "1"; // Update hidden field
+                        // Ensure "nonexistent" is turned off
+                        nonexistentIcon.style.color = "grey";
+                        nonexistentButton.classList.remove("btn-outline-primary");
+                        nonexistentButton.classList.add("btn-outline-secondary"); // Grey button
                     }
                 } else {
                     console.error("Server response indicates failure:", response.message);
@@ -823,12 +827,59 @@ function toggleEmailVisibility(email, index) {
         }
     };
 
-    xhr.send("email=" + encodeURIComponent(email));
+    xhr.send("email=" + encodeURIComponent(email) + "&toggle=visibility");
 }
 
-</script>
 
+function toggleEmailNonExistence(email, index) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "update_email_visibility.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    var inputField = document.querySelector(`#email-row-${index} input`);
+                    var nonexistentIcon = document.querySelector(`#emailDoesNotExistBtn_${index} i`);
+                    var nonexistentButton = document.querySelector(`#emailDoesNotExistBtn_${index}`);
+                    var visibilityIcon = document.querySelector(`#emailToggleBtn_${index} i`);
+                    var visibilityButton = document.querySelector(`#emailToggleBtn_${index}`);
+
+                    if (inputField.style.color === "blue") {
+                        inputField.style.color = "";
+                        inputField.style.fontStyle = "";
+                        inputField.removeAttribute("readonly");
+                        nonexistentIcon.style.color = "grey"; // Mark as existent
+                        nonexistentButton.classList.remove("btn-outline-primary");
+                        nonexistentButton.classList.add("btn-outline-secondary"); // Grey button
+                    } else {
+                        inputField.style.color = "blue";
+                        inputField.style.fontStyle = "italic";
+                        inputField.setAttribute("readonly", "true");
+                        nonexistentIcon.style.color = "blue"; // Mark as non-existent
+                        nonexistentButton.classList.remove("btn-outline-secondary");
+                        nonexistentButton.classList.add("btn-outline-primary"); // Blue button
+                    }
+
+                    // If nonexistent is toggled ON, make visibility button grey
+                    visibilityIcon.style.color = "grey";
+                    visibilityButton.classList.remove("btn-outline-danger");
+                    visibilityButton.classList.add("btn-outline-secondary"); // Grey button
+                } else {
+                    console.error("Server response indicates failure:", response.message);
+                }
+            } catch (error) {
+                console.error("Error parsing server response:", error);
+            }
+        }
+    };
+
+    xhr.send("email=" + encodeURIComponent(email) + "&toggle=nonexistent");
+}
+
+    </script>
 
         <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1099,11 +1150,13 @@ foreach ($allCategories as $category) {
     <!-- Submit Button -->
     <div class="col-md-12 d-flex justify-content-center"  style="margin-bottom: 20px;">
         <!-- Save Button -->
-        <button type="submit" class="btn btn-success custom-btn">Save</button>
+        <button type="submit" class="btn btn-outline-success custom-btn" style="margin-right: 10px;">Save</button>
+
+        <button type="submit" class="btn btn-outline-warning custom-btn">Cancel</button>
         
         <!-- Delete Button (Redirect to delete.php with subscriber_id) -->
         <!-- Delete Button (Redirect to delete.php with subscriber_id) -->
-<a href="delete.php?subscriber_id=<?php echo $subscriberID; ?>" class="btn btn-danger custom-btn ml-2" onclick="return confirm('Are you sure you want to delete this subscriber?');">Delete</a>
+<a href="delete.php?subscriber_id=<?php echo $subscriberID; ?>" class="btn btn-outline-danger custom-btn ml-2" onclick="return confirm('Are you sure you want to delete this subscriber?');">Delete</a>
 
     </div>
 </div>

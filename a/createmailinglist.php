@@ -109,7 +109,7 @@ function getEmailsByCategoryOrganizerWithLimit($conn, $category, $organizer, $of
             FROM emails e
             INNER JOIN event_subscriber_mapping esm ON e.subscriber_id = esm.subscriber_id
             INNER JOIN subscribers s ON e.subscriber_id = s.subscriber_id
-            WHERE e.hidden = 0 ";
+            WHERE e.hidden = 0 AND e.does_not_exist = 0 ";
 
     // Check if any categories are selected
 if (!empty($category) && !in_array("all", $category)) {
@@ -291,16 +291,27 @@ usort($categoryList, function($a, $b) {
 
 // Loop through the sorted categories and display them
 foreach ($categoryList as $cat) {
+    $categoryId = $cat["category_id"];
+    $categoryName = htmlspecialchars($cat["category_name"]); // Ensure proper escaping
+
     echo "<tr>";
-    echo "<td>" . $cat["category_name"] . "</td>";
-    echo "<td><input type='checkbox' name='category[]' value='" . $cat["category_id"] . "'";
-    if (in_array($cat["category_id"], $category)) {
+    echo "<td>
+            <a href='subscribers.php?category_id=$categoryId' class='category-name' data-category-id='$categoryId' 
+            style='text-decoration: underline; color: inherit;' 
+            onmouseover=\"this.style.textDecoration='none'; this.style.color='inherit';\" 
+            onmouseout=\"this.style.textDecoration='underline'; this.style.color='inherit';\">$categoryName</a>
+          </td>";
+    echo "<td><input type='checkbox' name='category[]' value='$categoryId'";
+    
+    if (in_array($categoryId, $category)) {
         echo " checked";
     }
+
     echo "></td>";
-    echo "<td>" . getTotalPeopleByCategory($conn, [$cat["category_id"]]) . "</td>";
+    echo "<td>" . getTotalPeopleByCategory($conn, [$categoryId]) . "</td>";
     echo "</tr>";
 }
+
 ?>
 
                     </tbody>
@@ -336,16 +347,27 @@ usort($organizerList, function($a, $b) {
 
 // Loop through the sorted organizers and display them
 foreach ($organizerList as $org) {
+    $organizerId = $org["organizer_id"];
+    $organizerName = htmlspecialchars($org["organizer_name"]); // Ensure proper escaping
+
     echo "<tr>";
-    echo "<td>" . $org["organizer_name"] . "</td>";
-    echo "<td><input type='checkbox' name='organizer[]' value='" . $org["organizer_id"] . "'";
-    if (in_array($org["organizer_id"], $organizer)) {
+    echo "<td>
+            <a href='subscribers.php?organizer_id=$organizerId' class='organizer-name' data-organizer-id='$organizerId' 
+            style='text-decoration: underline; color: inherit;' 
+            onmouseover=\"this.style.textDecoration='none'; this.style.color='inherit';\" 
+            onmouseout=\"this.style.textDecoration='underline'; this.style.color='inherit';\">$organizerName</a>
+          </td>";
+    echo "<td><input type='checkbox' name='organizer[]' value='$organizerId'";
+    
+    if (in_array($organizerId, $organizer)) {
         echo " checked";
     }
+
     echo "></td>";
-    echo "<td>" . getTotalPeopleByOrganizer($conn, [$org["organizer_id"]]) . "</td>";
+    echo "<td>" . getTotalPeopleByOrganizer($conn, [$organizerId]) . "</td>";
     echo "</tr>";
 }
+
 ?>
 
                 </tbody>

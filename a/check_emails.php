@@ -99,7 +99,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
     </div>
 
-    <!-- Redirect Link to phonenumber.php -->
-    <a href="phonenumber.php" class="btn btn-primary">Go to Phone Number Page</a>
 </body>
 </html>

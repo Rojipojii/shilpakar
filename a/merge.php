@@ -219,14 +219,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body> 
 <?php 
-// // Calculate the total number of groups to merge
+// Calculate the total number of groups to merge
 // $totalGroupsToMerge = count($groups);
 
 include("header.php"); ?>
 <div class="content-wrapper">
     <div class="container-fluid">
         <div class="container mt-5">
-        <h3 class="text-center mb-4">
+            <h3 class="text-center mb-4">
                 Merge & Fix
                 <?php if ($subscriberIdFilter): ?>
                     <!-- (Displaying Group for Subscriber ID: <?= $subscriberIdFilter ?>) -->
@@ -234,6 +234,7 @@ include("header.php"); ?>
                     (<?= $totalGroupsToMerge ?> Groups to Merge)
                 <?php endif; ?>
             </h3>
+            
             <?php if (!empty($groupsToDisplay)): ?>
                 <?php foreach ($groupsToDisplay as $index => $group): ?>
                     <form action="merge.php" method="POST" class="mb-5 merge-form">
@@ -241,12 +242,11 @@ include("header.php"); ?>
                             <table class="table table-bordered table-striped">
                                 <thead class="table-dark">
                                     <tr>
-                                    <th style="text-align: center; vertical-align: middle; padding: 10px;">
-    <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
-        <input class="form-check-input select-all" type="checkbox">
-    </div>
-</th>
-
+                                        <th style="text-align: center; vertical-align: middle; padding: 10px;">
+                                            <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                                                <input class="form-check-input select-all" type="checkbox">
+                                            </div>
+                                        </th>
                                         <th>Full Name</th>
                                         <th>Phone Numbers</th>
                                         <th>Emails</th>
@@ -257,17 +257,16 @@ include("header.php"); ?>
                                 <tbody>
                                     <?php foreach ($group['subscribers'] as $subscriberId => $details): ?>
                                         <tr>
-                                        <td style="text-align: center; vertical-align: top;">
-  <input class="form-check-input" type="checkbox" name="merge[]" value="<?= $subscriberId ?>">
-</td>
-
-                                        <td>    
-                                            <a href="edit_subscriber.php?id=<?= $subscriberId ?>" 
-   style="text-decoration: underline; color: inherit;" 
-   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
-   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
-    <?= $details['full_name'] ?>
-</a>
+                                            <td style="text-align: center; vertical-align: top;">
+                                                <input class="form-check-input" type="checkbox" name="merge[]" value="<?= $subscriberId ?>">
+                                            </td>
+                                            <td>    
+                                                <a href="edit_subscriber.php?id=<?= $subscriberId ?>" 
+                                                   style="text-decoration: underline; color: inherit;" 
+                                                   onmouseover="this.style.textDecoration='none'; this.style.color='inherit';" 
+                                                   onmouseout="this.style.textDecoration='underline'; this.style.color='inherit';">
+                                                    <?= $details['full_name'] ?>
+                                                </a>
                                             </td>
                                             <td><?= implode(', ', array_unique($details['phone_numbers'])) ?></td>
                                             <td><?= implode(', ', array_unique($details['emails'])) ?></td>
@@ -280,31 +279,34 @@ include("header.php"); ?>
                         </div>
                         <!-- Hidden input to identify the group -->
                         <input type="hidden" name="group_id" value="<?= $startIndex + $index + 1 ?>">
+                        
                         <div class="d-flex justify-content-center mt-3">
                             <button type="submit" class="btn btn-outline-success">Merge</button>
                         </div>
+                        
                         <!-- Error message -->
                         <p class="text-danger text-center mt-2 error-message" style="display: none;">
-        Please select at least 2 checkbox.
-    </p>
+                            Please select at least 2 checkboxes.
+                        </p>
                     </form>
                 <?php endforeach; ?>
 
                 <!-- Pagination controls -->
                 <?php if (!$subscriberIdFilter): ?>
-    <div class="pagination justify-content-center">
-        <?php if ($currentPage > 1): ?>
-            <a class="btn btn-secondary" href="?page=<?= $currentPage - 1 ?>">Previous</a>
-        <?php endif; ?>
-        <?php for ($page = 1; $page <= $totalPages; $page++): ?>
-            <a class="btn btn-secondary <?= $page == $currentPage ? 'active' : '' ?>" href="?page=<?= $page ?>"><?= $page ?></a>
-        <?php endfor; ?>
-        <?php if ($currentPage < $totalPages): ?>
-            <a class="btn btn-secondary" href="?page=<?= $currentPage + 1 ?>">Next</a>
-        <?php endif; ?>
-    </div>
-<?php endif; ?>
+                    <div class="pagination justify-content-center">
+                        <?php if ($currentPage > 1): ?>
+                            <a class="btn btn-secondary" href="?page=<?= $currentPage - 1 ?>">Previous</a>
+                        <?php endif; ?>
 
+                        <?php for ($page = 1; $page <= $totalPages; $page++): ?>
+                            <a class="btn btn-secondary <?= $page == $currentPage ? 'active' : '' ?>" href="?page=<?= $page ?>"><?= $page ?></a>
+                        <?php endfor; ?>
+
+                        <?php if ($currentPage < $totalPages): ?>
+                            <a class="btn btn-secondary" href="?page=<?= $currentPage + 1 ?>">Next</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
 
             <?php else: ?>
                 <p class="text-center">No duplicate records found.</p>
@@ -318,35 +320,32 @@ include("header.php"); ?>
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.merge-form').forEach(form => {
-        const selectAllCheckbox = form.querySelector('.select-all');
-        const checkboxes = form.querySelectorAll('input[name="merge[]"]');
+        document.querySelectorAll('.merge-form').forEach(form => {
+            const selectAllCheckbox = form.querySelector('.select-all');
+            const checkboxes = form.querySelectorAll('input[name="merge[]"]');
 
-        if (selectAllCheckbox) {
-            selectAllCheckbox.addEventListener('change', function () {
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = this.checked;
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function () {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
                 });
-            });
-        }
-
-        form.addEventListener('submit', (e) => {
-            const errorMessage = form.querySelector('.error-message');
-            const checkedCount = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
-
-            if (checkedCount < 2) {
-                e.preventDefault();
-                errorMessage.style.display = 'block';
-            } else {
-                errorMessage.style.display = 'none';
             }
+
+            form.addEventListener('submit', (e) => {
+                const errorMessage = form.querySelector('.error-message');
+                const checkedCount = Array.from(checkboxes).filter(checkbox => checkbox.checked).length;
+
+                if (checkedCount < 2) {
+                    e.preventDefault();
+                    errorMessage.style.display = 'block';
+                } else {
+                    errorMessage.style.display = 'none';
+                }
+            });
         });
     });
-});
-
 </script>
-
 
 </body>
 </html>
-
