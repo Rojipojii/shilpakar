@@ -117,6 +117,23 @@ $stmtDesignationOrganization->close();
     // Debugging logs before insertion
 error_log("Inserting mapping: Subscriber ID: $subscriberId, Event ID: " . ($event_id ?? 'NULL') . ", Organizer ID: " . ($organizer_id ?? 'NULL'));
 
+ // Check if event_id and organizer_id are provided; if not, fetch organizer_id from the events table
+ if ($event_id !== null) {
+    // Fetch organizer_id from the events table
+    $sqlEvent = "SELECT organizer_id FROM events WHERE event_id = ?";
+    $stmtEvent = $conn->prepare($sqlEvent);
+    if (!$stmtEvent) {
+        error_log("Prepare failed: " . $conn->error);
+        return false;
+    }
+    $stmtEvent->bind_param("i", $event_id);
+    $stmtEvent->execute();
+    $stmtEvent->bind_result($fetchedOrganizerId);
+    if ($stmtEvent->fetch()) {
+        $organizer_id = $fetchedOrganizerId; // Set the fetched organizer_id
+    }
+    $stmtEvent->close();
+}
 if ($event_id !== null && $organizer_id !== null) {
     $sqlMapping = "INSERT INTO event_subscriber_mapping (subscriber_id, event_id, organizer_id) VALUES (?, ?, ?)";
     $stmtMapping = $conn->prepare($sqlMapping);
@@ -216,14 +233,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $mobileNumber = $_POST["mobileNumber"];
     $fullName = ucwords(strtolower(trim($_POST["fullName"])));
     $email = strtolower(trim($_POST["email"]));
-    $designation = trim($_POST["designation"]); // Preserve original case
-    $organization = trim($_POST["organization"]); // Preserve original case    
+    $designation = trim($_POST["designation"]);
+    $organization = trim($_POST["organization"]);
     $number_of_events_attended = 1;
+    $address = null; // Address set to NULL
 
-    // Use trim to remove leading and trailing spaces from the full name
-    $fullName = trim($fullName);
-    $address = null; // Set the address to NULL
+    // Default popup message
+    $popupMessage = " ";
 
+    // Check if email exists in the database
+    $sqlCheckEmail = "SELECT hidden, unsubscribed FROM emails WHERE email = ?";
+    $stmtCheckEmail = $conn->prepare($sqlCheckEmail);
+    $stmtCheckEmail->bind_param("s", $email);
+    $stmtCheckEmail->execute();
+    $stmtCheckEmail->store_result();
+    
+    if ($stmtCheckEmail->num_rows > 0) {
+        $stmtCheckEmail->bind_result($hidden, $unsubscribed);
+        $stmtCheckEmail->fetch();
+        
+        if ($hidden == 1) {
+            $_SESSION["popup_message"] = "Your email is full! Please empty your email.";
+            $popupMessage = "Your email is full! Please empty your email.";
+        } elseif ($unsubscribed == 1) {
+            $_SESSION["popup_message"] = "You have unsubscribed from our mailing list! Do you want to subscribe to it again?";
+            $popupMessage = "You have unsubscribed from our mailing list! Do you want to subscribe to it again?";
+        }
+    }
+    $stmtCheckEmail->close();
+
+    // Proceed with registration if email is not hidden or unsubscribed
     if ($multipleEventsAvailable) {
         $selectedEvent = $_POST["selectedEvent"];
         if (empty($selectedEvent)) {
@@ -231,11 +270,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             $event = $_SESSION["activatedEvents"][$selectedEvent];
             $event_id = $event["event_id"];
-            $organizer_id = $event["organizer_id"]; // Keep organizer_id
-
+            $organizer_id = $event["organizer_id"];
+    
             if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $organizer_id)) {
                 $event_name = $event["eventname"];
-                header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
+                $redirectUrl = "registration_success.php?name=" . urlencode($fullName) 
+                               . "&event=" . urlencode($event_name)
+                               . "&message=" . urlencode($popupMessage)
+                               . "&email=" . urlencode($email);  // Add email parameter here                
+                header("Location: $redirectUrl");
                 exit();
             } else {
                 echo "Error: Failed to insert data into the database.";
@@ -246,25 +289,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $activatedEvent = reset($activatedEvents);
             $event_id = $activatedEvent["event_id"];
             $organizer_id = $activatedEvent["organizer_id"];
-
+        
             if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended, $event_id, $organizer_id)) {
                 $event_name = $activatedEvent["eventname"];
-                header("Location: registration_success.php?name=" . urlencode($fullName) . "&event=" . urlencode($event_name));
+                $redirectUrl = "registration_success.php?name=" . urlencode($fullName) 
+                               . "&event=" . urlencode($event_name)
+                               . "&message=" . urlencode($popupMessage)
+                               . "&email=" . urlencode($email);  // Add email parameter here
+                
+                header("Location: $redirectUrl");
                 exit();
             } else {
                 echo "Error: Failed to insert data into the database.";
             }
-        } else {
+        }
+         else {
             if (insertData($conn, $fullName, $mobileNumber, $email, $designation, $organization, $address, $number_of_events_attended)) {
-                header("Location: registration_success.php?name=" . urlencode($fullName));
+                $redirectUrl = "registration_success.php?name=" . urlencode($fullName) 
+                               . "&event=" . urlencode($event_name)
+                               . "&message=" . urlencode($popupMessage)
+                               . "&email=" . urlencode($email);  // Add email parameter here
+                
+                header("Location: $redirectUrl");
                 exit();
             } else {
                 echo "Error: Failed to insert data into the database.";
             }
         }
     }
-}
-
+}    
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -330,7 +383,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 
     <?php if ($multipleEventsAvailable): ?>
-        <label for="selectedEvent">Select Today's Event:</label>
+        <label for="selectedEvent" style="font-size: 18px;">Select Today's Event:</label>
         <select id="selectedEvent" name="selectedEvent" class="form-control" required>
             <option value="">Select an event</option>
             <?php foreach ($activatedEvents as $event): ?>
@@ -339,7 +392,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </option>
             <?php endforeach; ?>
         </select>
-            </div>
+            </div><br>
     <?php endif; ?>
 
 

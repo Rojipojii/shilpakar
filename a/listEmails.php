@@ -86,7 +86,46 @@ if ($mailboxFullResult) {
 }
 
 // Query to select emails where does_not_exist = 1 along with subscriber_id
-$unsubscribedEmailsQuery = "SELECT DISTINCT email, subscriber_id FROM emails WHERE does_not_exist = 1 ORDER BY email ASC";
+$nonexistentEmailsQuery = "SELECT DISTINCT email, subscriber_id FROM emails WHERE does_not_exist = 1 ORDER BY email ASC";
+$nonexistentEmailsResult = mysqli_query($conn, $nonexistentEmailsQuery);
+
+$nonexistentEmailsContent = '';
+$nonexistentEmailsCount = 0;
+
+if ($nonexistentEmailsResult) {
+    if (mysqli_num_rows($nonexistentEmailsResult) > 0) {
+        $nonexistentEmailsContent .= "<table class='table table-bordered table-striped'>
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                    </tr>
+                </thead>
+                <tbody>";
+
+        while ($row = mysqli_fetch_assoc($nonexistentEmailsResult)) {
+            $email = htmlspecialchars($row['email']);
+            $subscriberId = $row['subscriber_id'];
+
+            $nonexistentEmailsContent .= "<tr>
+                <td><a href='edit_subscriber.php?id=$subscriberId'
+                style='text-decoration: underline; color: inherit;'
+                onmouseover=\"this.style.textDecoration='none'; this.style.color='inherit';\" 
+                onmouseout=\"this.style.textDecoration='underline'; this.style.color='inherit';\">$email</a></td>
+              </tr>";
+
+            $nonexistentEmailsCount++;
+        }
+
+        $nonexistentEmailsContent .= "</tbody></table>";
+    } else {
+        $nonexistentEmailsContent = "No nonexistent emails found.";
+    }
+} else {
+    $nonexistentEmailsContent = "Error executing query: " . mysqli_error($conn);
+}
+
+// Query to select emails where nonexistent = 1 along with subscriber_id
+$unsubscribedEmailsQuery = "SELECT DISTINCT email, subscriber_id FROM emails WHERE unsubscribed = 1 ORDER BY email ASC";
 $unsubscribedEmailsResult = mysqli_query($conn, $unsubscribedEmailsQuery);
 
 $unsubscribedEmailsContent = '';
@@ -123,6 +162,7 @@ if ($unsubscribedEmailsResult) {
 } else {
     $unsubscribedEmailsContent = "Error executing query: " . mysqli_error($conn);
 }
+
 
 // Subscribers without email content
 $subscribersWithoutEmailCount = 0;
@@ -254,34 +294,36 @@ mysqli_close($conn);
 <body>
     <?php include("header.php"); ?>
     <div class="content-wrapper">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-md-3">
-                        <h2>Mailbox Full (<?= ($mailboxFullCount); ?>)</h2>
-                        <?php echo $mailboxFullContent; ?>
-                    </div>
+    <div class="container-fluid">
+        <div class="row justify-content-evenly gx-3">
+            <div class="col-md-auto">
+                <h2>Mailbox Full (<?= $mailboxFullCount; ?>)</h2>
+                <?php echo $mailboxFullContent; ?>
+            </div>
 
-                    <div class="col-md-3">
-    <h2>Unsubscribed Emails (<?= $unsubscribedEmailsCount; ?>)</h2>
-    <?php echo $unsubscribedEmailsContent; ?>
-</div>
+            <div class="col-md-auto">
+                <h2>Nonexistent Emails (<?= $nonexistentEmailsCount; ?>)</h2>
+                <?php echo $nonexistentEmailsContent; ?>
+            </div>
 
+            <div class="col-md-auto">
+                <h2>Unsubscribed Emails (<?= $unsubscribedEmailsCount; ?>)</h2>
+                <?php echo $unsubscribedEmailsContent; ?>
+            </div>
 
-                    <!-- Display the subscribers without emails section -->
-                    <div class="col-md-3">
-                        <h2>Subscribers Without Emails (<?= ($subscribersWithoutEmailCount); ?>)</h2>
-                        <?php echo $subscribersWithoutEmailContent; ?>
-                    </div>
-                     <!-- Display the subscribers without emails section -->
-                     <div class="col-md-3">
-                        <h2>Subscribers Without Phone Numbers (<?= ($subscribersWithoutPhoneCount); ?>)</h2>
-                        <?php echo $subscribersWithoutPhoneContent; ?>
-                    </div>
-                    
-                </div>
+            <div class="col-md-auto">
+                <h2>Subscribers Without Emails (<?= $subscribersWithoutEmailCount; ?>)</h2>
+                <?php echo $subscribersWithoutEmailContent; ?>
+            </div>
+
+            <div class="col-md-auto">
+                <h2>Subscribers Without Phone Numbers (<?= $subscribersWithoutPhoneCount; ?>)</h2>
+                <?php echo $subscribersWithoutPhoneContent; ?>
             </div>
         </div>
     </div>
+</div>
+
 
     <!-- Include Bootstrap JS (optional) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

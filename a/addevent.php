@@ -285,10 +285,12 @@ $organizers = fetchOrganizers($conn);
         
         // Check if event has attendees
         if ($totalAttendees > 0) {
-            // Disable the organizer dropdown if event has attendees
             echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;' disabled>";
+            $organizerId = isset($event['organizer_id']) ? $event['organizer_id'] : '';
             echo "<option value='$organizerId' selected>$organizerName (Not Editable)</option>";
+
         } else {
+        
             // If no attendees, allow editing
             echo "<select class='form-control organizer-dropdown' data-event-id='$eventId' style='display: none;'>";
             echo "<option value='' disabled selected>Select Organizer</option>";

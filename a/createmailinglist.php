@@ -109,7 +109,7 @@ function getEmailsByCategoryOrganizerWithLimit($conn, $category, $organizer, $of
             FROM emails e
             INNER JOIN event_subscriber_mapping esm ON e.subscriber_id = esm.subscriber_id
             INNER JOIN subscribers s ON e.subscriber_id = s.subscriber_id
-            WHERE e.hidden = 0 AND e.does_not_exist = 0 ";
+            WHERE e.hidden = 0 AND e.does_not_exist = 0 AND unsubscribed = 0";
 
     // Check if any categories are selected
 if (!empty($category) && !in_array("all", $category)) {

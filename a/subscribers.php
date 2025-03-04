@@ -652,7 +652,7 @@ $stmt->close();
 <!-- ./wrapper -->
 <script>
 function sanitizeEmailForSelector(email) {
-    return email.replace(/@/g, '-').replace(/\./g, '-');
+    return email.replace(/[@.]/g, '-'); // Ensure valid ID selection
 }
 
 function toggleEmailVisibility(email) {
@@ -675,17 +675,18 @@ function toggleEmailVisibility(email) {
                         return;
                     }
 
-                    var isHidden = emailText.style.color === "red";
+                    var isNowHidden = response.updatedValue === 1;
 
-                    // Toggle visibility state
-                    emailText.style.color = isHidden ? "" : "red";
-                    emailText.style.fontStyle = isHidden ? "" : "italic";
+                    // Update text style
+                    emailText.style.color = isNowHidden ? "red" : "";
+                    emailText.style.fontStyle = isNowHidden ? "italic" : "";
 
-                    if (isHidden) {
-                        visibilityButton.classList.replace("btn-outline-danger", "btn-outline-secondary");
-                    } else {
+                    // Update button styles
+                    if (isNowHidden) {
                         visibilityButton.classList.replace("btn-outline-secondary", "btn-outline-danger");
                         nonexistentButton.classList.replace("btn-outline-primary", "btn-outline-secondary"); // Reset nonexistent
+                    } else {
+                        visibilityButton.classList.replace("btn-outline-danger", "btn-outline-secondary");
                     }
                 } else {
                     console.error("Server response failure:", response.message);
@@ -719,17 +720,18 @@ function toggleEmailNonExistence(email) {
                         return;
                     }
 
-                    var isNonExistent = emailText.style.color === "blue";
+                    var isNowNonExistent = response.updatedValue === 1;
 
-                    // Toggle nonexistent state
-                    emailText.style.color = isNonExistent ? "" : "blue";
-                    emailText.style.fontStyle = isNonExistent ? "" : "italic";
+                    // Update text style
+                    emailText.style.color = isNowNonExistent ? "blue" : "";
+                    emailText.style.fontStyle = isNowNonExistent ? "italic" : "";
 
-                    if (isNonExistent) {
-                        nonexistentButton.classList.replace("btn-outline-primary", "btn-outline-secondary");
-                    } else {
+                    // Update button styles
+                    if (isNowNonExistent) {
                         nonexistentButton.classList.replace("btn-outline-secondary", "btn-outline-primary");
                         visibilityButton.classList.replace("btn-outline-danger", "btn-outline-secondary"); // Reset visibility
+                    } else {
+                        nonexistentButton.classList.replace("btn-outline-primary", "btn-outline-secondary");
                     }
                 } else {
                     console.error("Server response failure:", response.message);
@@ -742,7 +744,6 @@ function toggleEmailNonExistence(email) {
 
     xhr.send("email=" + encodeURIComponent(email) + "&toggle=nonexistent");
 }
-
 </script>
 
 
